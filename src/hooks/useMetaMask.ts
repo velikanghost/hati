@@ -274,7 +274,7 @@ export const useMetaMask = () => {
 
   const disconnect = useCallback(async () => {
     if (sdk) {
-      await sdk.disconnect()
+      await sdk.terminate()
     }
     setAccount(null)
     setCardTier(null)

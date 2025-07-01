@@ -8,7 +8,7 @@ import {
 import { setBridgeComplete } from '@/store/slices/bridgeSlice'
 import { useMetaMask } from '@/hooks'
 import { useLiFiBridge } from '@/hooks/useLiFiBridge'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { LoadingIcon } from '@/components/icons/loadingIcon'
 import SelectToken from '@/components/selectToken'
 import { Token } from '@/lib/types/token'
@@ -38,6 +38,7 @@ const Transfer = () => {
 
   const [activeTab, setActiveTab] = useState<Tab>('DEFAULT')
   const [userToken, setUserToken] = useState<Token>()
+  const hasCheckedInitialConnection = useRef(false)
 
   const merchantToken = tokens[2]
   const chain = 'Arbitrum Sepolia'
@@ -58,8 +59,7 @@ const Transfer = () => {
       // Set account from MetaMask connection
       dispatch(setUserEvmAddress(result?.address || ''))
 
-      console.log(result)
-      console.log(account)
+      console.log('Wallet connected:', result)
       // if (result.cardTier?.hasCard) {
       //   toast.success(
       //     `MetaMask Card verified! Welcome ${result.cardTier.tier} member`,
@@ -78,11 +78,33 @@ const Transfer = () => {
   }, [connectWallet, dispatch])
 
   useEffect(() => {
-    // Only check once on mount for existing connection
-    if (window.ethereum?.selectedAddress && !userEvmAccount.address) {
-      getAccount()
+    // Only check once on mount for existing connection from MetaMask SDK
+    const checkExistingConnection = async () => {
+      // Check if we have an existing account from the SDK and no Redux state set
+      if (
+        account?.address &&
+        !userEvmAccount.address &&
+        !hasCheckedInitialConnection.current
+      ) {
+        hasCheckedInitialConnection.current = true
+        try {
+          // Set account from existing MetaMask SDK connection
+          dispatch(setUserEvmAddress(account.address))
+          console.log('Existing SDK connection found:', account)
+        } catch (error: any) {
+          toast.error(
+            error?.message || error || 'Failed to restore connection',
+            {
+              duration: 3000,
+              position: 'top-center',
+            },
+          )
+        }
+      }
     }
-  }, []) // Empty dependency - only run once on mount
+
+    checkExistingConnection()
+  }, [account, dispatch, userEvmAccount.address]) // Use SDK account state instead of window.ethereum
 
   const beginTransfer = async () => {
     if (!userToken?.address) {
@@ -167,6 +189,7 @@ const Transfer = () => {
                       onClick={async () => {
                         await disconnect()
                         dispatch(disconnectWallet())
+                        hasCheckedInitialConnection.current = false
                         toast.success('Wallet disconnected', {
                           duration: 2000,
                           position: 'top-center',
