@@ -1,0 +1,43 @@
+@use '../styles/abstracts/variables' as *;
+@use '../styles/Main.scss';
+
+@import url('https://fonts.googleapis.com/css2?family=Catamaran:wght@100..900&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Raleway:ital,wght@0,100..900;1,100..900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Raleway', sans-serif;
+  box-sizing: border-box;
+}
+
+.btn-primary {
+  padding: 1.5rem;
+  border-radius: 4px;
+  border: 1px solid #ebe8e2;
+}
+
+.trydemo_btn {
+  padding: 0.7rem 1.4rem;
+  border-radius: 4px;
+  border: 1px solid #ebe8e2;
+  outline: none;
+}
+
+.btn-secondary {
+  padding: 1.5rem;
+  border: 1px solid $off-black;
+}
+
+.transparent {
+  background: transparent;
+}
+
+@layer base {
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}

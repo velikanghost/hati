@@ -1,0 +1,21 @@
+@use '../abstracts/variables' as *;
+
+.hero_wrapper {
+  background: url('/assets/hero_bg.jpg');
+  width: 100%;
+  background-position: center;
+}
+
+.section .section-title,
+.hero-container .heading,
+.statistics-card .metric {
+  font-size: clamp(32px, 8.5vw, 55px);
+  line-height: 1.2;
+}
+
+.hero-container .description,
+.statistics-card .title {
+  font-size: clamp(14px, 3vw, 20px);
+  font-weight: 300;
+  color: $light-grey;
+}

@@ -1,0 +1,103 @@
+@use '../abstracts/variables' as *;
+
+.navigation-menu .nav-container .nav-menu-items {
+  display: none;
+  gap: 32px;
+  justify-content: center;
+  align-items: center;
+}
+
+.navigation-menu .nav-container .connect-button {
+  width: 50%;
+  display: none;
+}
+
+.custom-sidebar .top-area {
+  display: flex;
+  justify-content: space-between;
+  padding: 16px;
+  padding-bottom: 0px;
+}
+
+.custom-sidebar .menu-icon-button {
+  width: 32px;
+  height: 32px;
+}
+
+.custom-sidebar__overlay {
+  position: fixed;
+  width: 100vw;
+  height: 100vh;
+  top: 0;
+  left: 0;
+  background-color: #00000046;
+  z-index: 1;
+  backdrop-filter: blur(2px);
+  z-index: 99;
+}
+
+.custom-sidebar {
+  position: absolute;
+  right: 0;
+  width: 60%;
+  height: 100%;
+  background-color: $whitesmoke2;
+  overflow-y: scroll;
+  /* opacity: .4; */
+}
+
+.custom-sidebar .menu-items {
+  height: 100%;
+  /* background-color: #005aa4; */
+}
+
+.custom-sidebar .menu-items .item {
+  display: block;
+  padding: 16px;
+  background: $whitesmoke2;
+  border-bottom: 1px solid #00000046;
+  font-weight: 500;
+}
+
+.custom-sidebar .menu-items .item.dropdown {
+  padding: 0px;
+}
+
+.custom-sidebar .menu-items .item.dropdown .dropdown-head {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+}
+
+.custom-sidebar .item.dropdown .menu-items .item:first-child {
+  border-top: 1px solid #00000046;
+}
+
+.custom-sidebar .item.dropdown .menu-items .item:last-child {
+  border: none !important;
+}
+
+.custom-sidebar .menu-items a.item:active,
+.custom-sidebar .menu-items a.item:hover,
+.custom-sidebar .menu-items .item.dropdown .dropdown-head:active,
+.custom-sidebar .menu-items .item.dropdown .dropdown-head:hover {
+  /* background: none; */
+  color: $white;
+}
+
+.custom-sidebar .top-area {
+  height: 80px;
+}
+
+@media (min-width: 1024px) {
+  .navigation-menu .nav-container .nav-menu-items {
+    display: flex;
+  }
+
+  .navigation-menu .nav-container .connect-button {
+    width: 50%;
+    display: block;
+  }
+}

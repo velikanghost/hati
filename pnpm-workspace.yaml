@@ -1,0 +1,6 @@
+onlyBuiltDependencies:
+  - '@parcel/watcher'
+  - bufferutil
+  - protobufjs
+  - sharp
+  - utf-8-validate
