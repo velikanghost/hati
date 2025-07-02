@@ -1,5 +1,4 @@
 import { Button } from '@/components/ui/button'
-import { tokens } from '@/lib/data'
 import { useAppSelector, useAppDispatch } from '@/store/hooks'
 import {
   setUserEvmAddress,
@@ -13,9 +12,8 @@ import { LoadingIcon } from '@/components/icons/loadingIcon'
 import SelectToken from '@/components/selectToken'
 import { Token } from '@/lib/types/token'
 import Navbar from '@/components/layouts/navbar'
-import MerchantLayer from '@/components/merchantLayer'
+
 import UserLayer from '@/components/userLayer'
-import CardVerification from '@/components/cardVerification'
 import Link from 'next/link'
 import { MdArrowOutward } from 'react-icons/md'
 import { Tab } from '@/lib/types/all'
@@ -25,7 +23,6 @@ import { toast } from 'sonner'
 const Transfer = () => {
   const dispatch = useAppDispatch()
   const {
-    transferAmount,
     merchantAmount,
     merchantAddress,
     selectedChain,
@@ -40,10 +37,9 @@ const Transfer = () => {
   const [userToken, setUserToken] = useState<Token>()
   const hasCheckedInitialConnection = useRef(false)
 
-  const merchantToken = tokens[2]
   const chain = 'Arbitrum Sepolia'
 
-  const { connectWallet, account, isConnecting, disconnect } = useMetaMask()
+  const { connectWallet, account, disconnect } = useMetaMask()
 
   // Bridge functionality
   const {
@@ -104,7 +100,7 @@ const Transfer = () => {
     }
 
     checkExistingConnection()
-  }, [account, dispatch, userEvmAccount.address]) // Use SDK account state instead of window.ethereum
+  }, [account?.address, dispatch, userEvmAccount.address]) // Use only address string to prevent object recreation issues
 
   const beginTransfer = async () => {
     if (!userToken?.address) {
@@ -209,21 +205,7 @@ const Transfer = () => {
               )}
             </div>
 
-            {/* MetaMask Card Verification */}
-            {userEvmAccount.address && (
-              <div className="mb-4">
-                <CardVerification />
-              </div>
-            )}
-
-            {activeTab === 'DEFAULT' && (
-              <MerchantLayer
-                network={chain}
-                token={merchantToken}
-                amount={Number(merchantAmount)}
-                setActiveTab={setActiveTab}
-              />
-            )}
+            {/* Card verification is now handled during wallet connection */}
 
             {activeTab === 'DEFAULT' && (
               <div className="checkout-card__body">

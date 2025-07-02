@@ -1,7 +1,13 @@
 import React from 'react'
 import type { Metadata } from 'next'
+import '@mantine/core/styles.css'
 import './globals.scss'
 import { ReduxProvider } from '@/components/providers/ReduxProvider'
+import {
+  ColorSchemeScript,
+  MantineProvider,
+  mantineHtmlProps,
+} from '@mantine/core'
 
 export const metadata: Metadata = {
   title: 'Hati | MetaMask Card-Powered Smart Payment Gateway',
@@ -29,13 +35,16 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" {...mantineHtmlProps}>
       <head>
+        <ColorSchemeScript />
         <meta charSet="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       </head>
       <body>
-        <ReduxProvider>{children}</ReduxProvider>
+        <MantineProvider>
+          <ReduxProvider>{children}</ReduxProvider>
+        </MantineProvider>
       </body>
     </html>
   )

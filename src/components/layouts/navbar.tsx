@@ -10,13 +10,7 @@ import { NavigationMenuLink } from '@radix-ui/react-navigation-menu'
 import { Button } from '@/components/ui/button'
 import { RxExit } from 'react-icons/rx'
 import { useRouter, usePathname } from 'next/navigation'
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from '@radix-ui/react-dropdown-menu'
+import Link from 'next/link'
 
 const Navbar = () => {
   const router = useRouter()
@@ -28,11 +22,6 @@ const Navbar = () => {
       name: 'Twitter/X',
       link: 'https://x.com/HatiPayments',
     },
-    // {
-    //   icon: <BsJournalText size={18} />,
-    //   name: 'Writings',
-    //   link: 'https://hati.substack.com',
-    // },
   ]
 
   return (
@@ -80,26 +69,22 @@ const Navbar = () => {
                   </NavigationMenuLink>
                 ))}
 
-                <DropdownMenu>
-                  <DropdownMenuTrigger className="trydemo_btn bg-[#EBE8E2] text-secondary-foreground hover:bg-[#EBE8E2]/90 hover:animate-pulse font-medium text-base">
-                    Try Demo
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent className="p-4 mt-2 -ml-20 bg-primary-foreground text-secondary-foreground w-[12.5rem] rounded-[4px]">
-                    <DropdownMenuItem
-                      className="mb-3 cursor-pointer"
-                      onClick={() => router.push('/demo')}
-                    >
-                      For Shoppers
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      className="cursor-pointer"
-                      onClick={() => router.push('/merchant')}
-                    >
-                      For Merchants
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <div className="flex gap-4">
+                  <Link
+                    href="/demo"
+                    passHref
+                    className="trydemo_btn bg-[#EBE8E2] text-secondary-foreground hover:bg-[#EBE8E2]/90 hover:animate-pulse font-medium text-base"
+                  >
+                    For Shoppers
+                  </Link>
+                  <Link
+                    href="/merchant"
+                    passHref
+                    className="trydemo_btn bg-[#EBE8E2] text-secondary-foreground hover:bg-[#EBE8E2]/90 hover:animate-pulse font-medium text-base"
+                  >
+                    For Merchants
+                  </Link>
+                </div>
               </div>
             </>
           )}

@@ -1,6 +1,9 @@
 onlyBuiltDependencies:
   - '@parcel/watcher'
+  - '@prisma/client'
+  - '@prisma/engines'
   - bufferutil
+  - prisma
   - protobufjs
   - sharp
   - utf-8-validate

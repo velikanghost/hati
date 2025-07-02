@@ -23,7 +23,6 @@ import {
 import { LoadingIcon } from '@/components/icons/loadingIcon'
 import { HatiWalletManager } from '@/components/hatiWalletManager'
 import CardVerification from '@/components/cardVerification'
-import { connectMetaMask, createHatiWallet } from '@/store/slices/walletSlice'
 import type { RootState, AppDispatch } from '@/store'
 
 export const HatiDemo: React.FC = () => {
@@ -100,16 +99,16 @@ export const HatiDemo: React.FC = () => {
   }, [])
 
   const handleWalletTypeChange = (type: 'metamask' | 'hati') => {
-    if (type === 'metamask') {
-      dispatch(connectMetaMask())
-    } else {
-      dispatch(
-        createHatiWallet({
-          userId: demoUserId,
-          isMerchant: userType === 'merchant',
-        }),
-      )
-    }
+    // if (type === 'metamask') {
+    //   dispatch(connectMetaMask())
+    // } else {
+    //   dispatch(
+    //     createHatiWallet({
+    //       userId: demoUserId,
+    //       isMerchant: userType === 'merchant',
+    //     }),
+    //   )
+    // }
     setDemoStep('user-flow')
   }
 

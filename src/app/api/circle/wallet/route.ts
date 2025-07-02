@@ -1,165 +1,216 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { initiateDeveloperControlledWalletsClient } from '@circle-fin/developer-controlled-wallets'
 
-interface HatiWalletConfig {
-  apiKey: string
-  entitySecret: string
+interface CreateWalletRequest {
+  userAddress: string
+  cardTier: 'basic' | 'premium' | 'elite'
 }
 
-class CircleWalletAPI {
-  private config: HatiWalletConfig
-  private baseUrl: string
+interface HatiWallet {
+  id: string
+  address: string
+  blockchain: string
+  walletType: 'merchant'
+  userId: string
+  network: string
+  createdAt: string
+}
+
+class HatiCircleWalletService {
+  private circleSdk: any
+  private readonly SUPPORTED_BLOCKCHAINS = ['EVM']
 
   constructor() {
-    this.config = {
-      apiKey: process.env.NEXT_PUBLIC_CIRCLE_API_KEY!,
-      entitySecret: process.env.NEXT_PUBLIC_CIRCLE_ENTITY_SECRET!,
+    if (!process.env.CIRCLE_API_KEY || !process.env.CIRCLE_ENTITY_SECRET) {
+      throw new Error(
+        'Circle API credentials not configured. Please set CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET in your .env file',
+      )
     }
-    this.baseUrl = 'https://api.circle.com/v1/w3s'
+
+    this.circleSdk = initiateDeveloperControlledWalletsClient({
+      baseUrl: 'https://api.circle.com',
+      apiKey: process.env.CIRCLE_API_KEY,
+      entitySecret: process.env.CIRCLE_ENTITY_SECRET,
+    })
   }
 
-  private async generateEntitySecretCiphertext(): Promise<string> {
+  async createHatiWallet(
+    userAddress: string,
+    cardTier: string,
+  ): Promise<HatiWallet> {
     try {
-      const publicKeyResponse = await fetch(
-        `${this.baseUrl}/config/entity/publicKey`,
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${this.config.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-        },
+      console.log(
+        `🔄 Creating Hati wallet for ${userAddress} with ${cardTier} tier...`,
       )
 
-      if (!publicKeyResponse.ok) {
-        throw new Error('Failed to fetch public key')
-      }
-
-      const { data } = await publicKeyResponse.json()
-      const publicKey = data.publicKey
-
-      const pemHeader = '-----BEGIN RSA PUBLIC KEY-----'
-      const pemFooter = '-----END RSA PUBLIC KEY-----'
-      const pemContents = publicKey
-        .replace(pemHeader, '')
-        .replace(pemFooter, '')
-        .replace(/\s/g, '')
-
-      const entitySecretBytes = new Uint8Array(
-        this.config.entitySecret
-          .match(/.{1,2}/g)!
-          .map((byte) => parseInt(byte, 16)),
-      )
-
-      const keyData = Uint8Array.from(atob(pemContents), (c) => c.charCodeAt(0))
-      const cryptoKey = await crypto.subtle.importKey(
-        'spki',
-        keyData,
-        { name: 'RSA-OAEP', hash: 'SHA-256' },
-        false,
-        ['encrypt'],
-      )
-
-      const encrypted = await crypto.subtle.encrypt(
-        { name: 'RSA-OAEP' },
-        cryptoKey,
-        entitySecretBytes,
-      )
-
-      return btoa(String.fromCharCode(...new Uint8Array(encrypted)))
-    } catch (error) {
-      console.error('Error generating entity secret ciphertext:', error)
-      throw new Error('Failed to generate entity secret ciphertext')
-    }
-  }
-
-  async createWallet(
-    userId: string,
-    blockchain: 'ETH' | 'MATIC' | 'AVAX' = 'ETH',
-  ) {
-    try {
-      const ciphertext = await this.generateEntitySecretCiphertext()
-
-      const response = await fetch(`${this.baseUrl}/developer/wallets`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.config.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          accountType: 'SCA',
-          blockchains: [blockchain],
-          count: 1,
-          walletSetId: `hati-${userId}`,
-          entitySecretCiphertext: ciphertext,
-        }),
+      // Create wallet set first (this groups related wallets)
+      const walletSetResponse = await this.circleSdk.createWalletSet({
+        name: `hati-merchant-${userAddress.toLowerCase().slice(0, 8)}`,
       })
 
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(`Circle API Error: ${error.message || 'Unknown error'}`)
+      const walletSetId = walletSetResponse.data?.walletSet?.id
+      if (!walletSetId) {
+        throw new Error('Failed to create wallet set')
       }
 
-      const { data } = await response.json()
-      return data.wallets[0]
-    } catch (error) {
-      console.error('Error creating Hati wallet:', error)
-      throw error
+      // Create the actual wallet
+      const walletResponse = await this.circleSdk.createWallets({
+        accountType: 'EOA',
+        blockchains: this.SUPPORTED_BLOCKCHAINS,
+        count: 1,
+        walletSetId: walletSetId,
+      })
+
+      const wallet = walletResponse.data?.wallets?.[0]
+      if (!wallet) {
+        throw new Error('Failed to create wallet')
+      }
+
+      console.log(`✅ Hati wallet created: ${wallet.id}`)
+
+      return {
+        id: wallet.id,
+        address: wallet.address,
+        blockchain: wallet.blockchain,
+        walletType: 'merchant',
+        userId: userAddress,
+        network: this.getNetworkName(wallet.blockchain),
+        createdAt: new Date().toISOString(),
+      }
+    } catch (error: any) {
+      console.error('❌ Error creating Hati wallet:', error)
+      throw new Error(`Failed to create Hati wallet: ${error.message}`)
     }
   }
 
   async getWalletBalance(walletId: string) {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/developer/wallets/${walletId}/balances`,
-        {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${this.config.apiKey}`,
-            'Content-Type': 'application/json',
-          },
-        },
-      )
+      const response = await this.circleSdk.getWallet({ id: walletId })
+      const balanceResponse = await this.circleSdk.getWalletTokenBalance({
+        id: walletId,
+      })
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch wallet balance')
+      return {
+        walletId,
+        address: response.data?.wallet?.address,
+        blockchain: response.data?.wallet?.blockchain,
+        balances: balanceResponse.data?.tokenBalances || [],
+        nativeBalance: response.data?.wallet?.balance || '0',
       }
+    } catch (error: any) {
+      console.error('Error getting wallet balance:', error)
+      throw new Error(`Failed to get wallet balance: ${error.message}`)
+    }
+  }
 
-      const { data } = await response.json()
-      return data.tokenBalances
-    } catch (error) {
-      console.error('Error fetching wallet balance:', error)
-      throw error
+  async signTransaction(walletId: string, transaction: any) {
+    try {
+      const response = await this.circleSdk.signTransaction({
+        walletId,
+        transaction: JSON.stringify(transaction),
+      })
+
+      return {
+        signedTransaction: response.data?.signedTransaction,
+        transactionHash: response.data?.transactionHash,
+      }
+    } catch (error: any) {
+      console.error('Error signing transaction:', error)
+      throw new Error(`Failed to sign transaction: ${error.message}`)
+    }
+  }
+
+  private getNetworkName(blockchain: string): string {
+    if (blockchain === 'EVM') {
+      return 'Linea'
+    }
+    return blockchain
+  }
+
+  getWalletInfo() {
+    return {
+      supportedBlockchains: this.SUPPORTED_BLOCKCHAINS,
+      features: [
+        'Linea-focused merchant wallets using Circle EVM support',
+        'USDC-focused payment processing on Linea',
+        'EOA wallet generation for receiving payments',
+        'Cross-chain payment bridging via LiFi',
+        'Enterprise-grade security',
+      ],
+      sdkVersion: '8.3.0',
+      network: 'Linea Mainnet (59144)',
+      note: 'Hati uses Circle generic EVM support for Linea merchant wallets',
     }
   }
 }
 
-const circleAPI = new CircleWalletAPI()
+// Initialize the service
+const hatiWalletService = new HatiCircleWalletService()
 
 export async function POST(request: NextRequest) {
   try {
-    const { action, ...params } = await request.json()
+    const body = await request.json()
+    const { userAddress, cardTier } = body as CreateWalletRequest
 
-    switch (action) {
-      case 'createWallet':
-        const wallet = await circleAPI.createWallet(
-          params.userId,
-          params.blockchain,
-        )
-        return NextResponse.json({ success: true, data: wallet })
-
-      case 'getBalance':
-        const balance = await circleAPI.getWalletBalance(params.walletId)
-        return NextResponse.json({ success: true, data: balance })
-
-      default:
-        return NextResponse.json(
-          { success: false, error: 'Invalid action' },
-          { status: 400 },
-        )
+    if (!userAddress) {
+      return NextResponse.json(
+        { error: 'userAddress is required' },
+        { status: 400 },
+      )
     }
+
+    // Validate card tier
+    const validTiers = ['basic', 'premium', 'elite']
+    if (cardTier && !validTiers.includes(cardTier)) {
+      return NextResponse.json(
+        { error: 'Invalid card tier. Must be basic, premium, or elite' },
+        { status: 400 },
+      )
+    }
+
+    const wallet = await hatiWalletService.createHatiWallet(
+      userAddress,
+      cardTier || 'basic',
+    )
+
+    console.log(`✅ Hati wallet API success: ${wallet.id} for ${userAddress}`)
+
+    return NextResponse.json(wallet)
   } catch (error: any) {
+    console.error('❌ Hati wallet API error:', error)
     return NextResponse.json(
-      { success: false, error: error.message || 'Internal server error' },
+      { error: error.message || 'Internal server error' },
+      { status: 500 },
+    )
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const walletId = searchParams.get('walletId')
+    const action = searchParams.get('action')
+
+    if (action === 'info') {
+      return NextResponse.json(hatiWalletService.getWalletInfo())
+    }
+
+    if (walletId && action === 'balance') {
+      const balance = await hatiWalletService.getWalletBalance(walletId)
+      return NextResponse.json(balance)
+    }
+
+    return NextResponse.json(
+      {
+        error:
+          'Invalid request. Specify action=info or action=balance&walletId=<id>',
+      },
+      { status: 400 },
+    )
+  } catch (error: any) {
+    console.error('GET /api/circle/wallet error:', error)
+    return NextResponse.json(
+      { error: error.message || 'Internal server error' },
       { status: 500 },
     )
   }
