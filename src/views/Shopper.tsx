@@ -7,6 +7,8 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { ChevronDown, Wallet, Shield, Store } from 'lucide-react'
+import { useTokenBalances, TokenBalance } from '@/hooks/useTokenBalances'
+import { TokenSelectModal } from '@/components/tokenSelectModal'
 
 const Shopper = () => {
   const dispatch = useAppDispatch()
@@ -14,6 +16,8 @@ const Shopper = () => {
 
   const hasCheckedInitialConnection = useRef(false)
   const [amount, setAmount] = useState('5')
+  const [showTokenModal, setShowTokenModal] = useState(false)
+  const [selectedToken, setSelectedToken] = useState<TokenBalance | null>(null)
   const [showChainSelector, setShowChainSelector] = useState(false)
 
   const { connectWallet, account } = useMetaMask()
@@ -100,6 +104,28 @@ const Shopper = () => {
 
   const feeReduction = getFeeReduction()
 
+  // Fetch token balances after wallet is connected
+  const {
+    balances,
+    isLoading: balancesLoading,
+    error: balancesError,
+  } = useTokenBalances(userEvmAccount.address, {
+    chain: 'eth',
+    enabled: Boolean(userEvmAccount.address),
+  })
+
+  // For now, just log balances to the console so we can verify
+  useEffect(() => {
+    if (userEvmAccount.address && !balancesLoading && !balancesError) {
+      console.log('Token balances:', balances)
+    }
+  }, [userEvmAccount.address, balances, balancesLoading, balancesError])
+
+  const handleSelectToken = (token: TokenBalance) => {
+    setSelectedToken(token)
+    setShowTokenModal(false)
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#FFD28F]/20 via-[#F1A5FB]/10 to-[#0B263F]/5">
       <Navbar />
@@ -149,10 +175,10 @@ const Shopper = () => {
                     <Button
                       variant="ghost"
                       className="justify-between w-full h-auto p-4 text-white border hover:bg-white/10 rounded-xl border-white/20"
-                      onClick={() => setShowChainSelector(!showChainSelector)}
+                      onClick={() => setShowTokenModal(true)}
                     >
                       <span className="text-lg font-medium">
-                        Select chain/token
+                        {selectedToken ? selectedToken.symbol : 'Select token'}
                       </span>
                       <ChevronDown size={20} />
                     </Button>
@@ -201,6 +227,15 @@ const Shopper = () => {
                   )}
                 </div>
               )}
+
+              {/* Token Select Modal */}
+              <TokenSelectModal
+                isOpen={showTokenModal}
+                onClose={() => setShowTokenModal(false)}
+                tokens={balances}
+                onSelect={handleSelectToken}
+                loading={balancesLoading}
+              />
             </CardContent>
           </Card>
         </div>
