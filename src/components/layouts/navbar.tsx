@@ -29,7 +29,11 @@ const Navbar = () => {
       <NavigationMenu className="mx-auto navigation-menu">
         <NavigationMenuList className="container items-center justify-between w-screen pt-2 nav-container">
           <NavigationMenuItem
-            className="py-4 text-2xl font-semibold cursor-pointer text-primary-foreground font-headings"
+            className={`py-4 text-2xl font-semibold cursor-pointer font-headings ${
+              pathname.includes('shoppers')
+                ? 'text-[#0B263F]'
+                : 'text-primary-foreground'
+            }`}
             onClick={() => router.push('/')}
           >
             Hati

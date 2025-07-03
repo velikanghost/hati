@@ -10,9 +10,9 @@ import {
 interface HatiBridgeRequest {
   action: 'getRoutes' | 'executePayment' | 'getStatus'
   fromChainId: number
-  toChainId?: number // Always Linea for Hati
+  toChainId: number
   fromTokenAddress: string
-  toTokenAddress?: string // default Linea USDC
+  toTokenAddress: string
   fromAmount: string
   fromAddress: string
   toAddress: string // Merchant's Hati wallet address
@@ -35,9 +35,6 @@ interface PaymentResult {
 class HatiLiFiBridgeAPI {
   private initialized = false
   private readonly integrator = 'hati-metamask-hackathon'
-  private readonly LINEA_CHAIN_ID = ChainId.LNA // Linea mainnet
-  private readonly LINEA_USDC_ADDRESS =
-    '0x176211869cA2b568f2A7D4EE941E073a821EE1ff' // Linea USDC
 
   constructor() {
     this.initializeSDK()
@@ -87,15 +84,18 @@ class HatiLiFiBridgeAPI {
     try {
       this.initializeSDK()
 
-      // 🎯 Always convert to USDC on Linea for Hati merchants
+      if (!request.toChainId || !request.toTokenAddress) {
+        throw new Error('Destination chain and token address are required')
+      }
+
       const routeRequest: RoutesRequest = {
         fromChainId: request.fromChainId,
-        toChainId: this.LINEA_CHAIN_ID,
+        toChainId: request.toChainId,
         fromTokenAddress: request.fromTokenAddress,
-        toTokenAddress: this.LINEA_USDC_ADDRESS,
+        toTokenAddress: request.toTokenAddress,
         fromAmount: request.fromAmount,
         fromAddress: request.fromAddress,
-        toAddress: request.toAddress, // Merchant's Hati wallet
+        toAddress: request.toAddress,
         options: {
           slippage: request.slippage || 0.03,
           integrator: this.integrator,
@@ -107,14 +107,14 @@ class HatiLiFiBridgeAPI {
       }
 
       console.log(
-        `🔄 Getting routes from Chain ${request.fromChainId} to Linea (USDC)`,
+        `🔄 Getting routes from Chain ${request.fromChainId} to Chain ${request.toChainId}`,
       )
 
       const result = await getRoutes(routeRequest)
 
       if (!result.routes || result.routes.length === 0) {
         throw new Error(
-          `No routes found from chain ${request.fromChainId} to Linea. Please try a different token or amount.`,
+          `No routes found from chain ${request.fromChainId} to chain ${request.toChainId}. Please try a different token or amount.`,
         )
       }
 
@@ -289,10 +289,15 @@ export async function POST(request: NextRequest) {
           !fullRequest.fromTokenAddress ||
           !fullRequest.fromAmount ||
           !fullRequest.fromAddress ||
-          !fullRequest.toAddress
+          !fullRequest.toAddress ||
+          !fullRequest.toChainId ||
+          !fullRequest.toTokenAddress
         ) {
           return NextResponse.json(
-            { success: false, error: 'Missing required parameters' },
+            {
+              success: false,
+              error: 'Missing required parameters for route request',
+            },
             { status: 400 },
           )
         }
@@ -303,10 +308,10 @@ export async function POST(request: NextRequest) {
           success: true,
           data: {
             ...routeResult,
-            destinationChain: 'Linea',
-            destinationToken: 'USDC',
-            message: `Converting to USDC on Linea via ${
-              hatiLiFiAPI['routeUsesCCTP'](routeResult.bestRoute)
+            message: `Converting via ${
+              routeResult.bestRoute.steps.some((step) =>
+                step.toolDetails.name.toLowerCase().includes('cctp'),
+              )
                 ? 'CCTP'
                 : 'Bridge'
             }`,
@@ -331,9 +336,17 @@ export async function POST(request: NextRequest) {
         })
 
       case 'getStatus':
-        if (!fullRequest.txHash) {
+        if (
+          !fullRequest.txHash ||
+          !fullRequest.fromChainId ||
+          !fullRequest.toChainId
+        ) {
           return NextResponse.json(
-            { success: false, error: 'Transaction hash required' },
+            {
+              success: false,
+              error:
+                'Transaction hash, source chain, and destination chain are required',
+            },
             { status: 400 },
           )
         }
@@ -341,7 +354,7 @@ export async function POST(request: NextRequest) {
         const status = await hatiLiFiAPI.checkTransactionStatus(
           fullRequest.txHash,
           fullRequest.fromChainId,
-          fullRequest.toChainId || hatiLiFiAPI['LINEA_CHAIN_ID'],
+          fullRequest.toChainId,
           fullRequest.bridgeTool || 'unknown',
         )
 

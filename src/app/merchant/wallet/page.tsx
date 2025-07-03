@@ -26,7 +26,10 @@ interface WalletData {
   hatiWalletId: string
   cardTier: 'Basic' | 'Premium' | 'Elite'
   balance: string
-  network: string
+  network: {
+    receive: string
+    withdraw: string
+  }
 }
 
 export default function WalletPage() {
@@ -47,16 +50,16 @@ export default function WalletPage() {
           console.log('Loading wallet data from cached merchant profile')
 
           const moralisResponse = await fetch(
-            `/api/moralis/tokens?address=${cachedMerchantData.hatiWalletAddress}&chain=linea`,
+            `/api/moralis/tokens?address=${cachedMerchantData.hatiWalletAddress}&chain=optimism`,
           )
 
           if (moralisResponse.ok) {
             const moralisData = await moralisResponse.json()
             if (moralisData.success) {
-              const usdcToken = moralisData.tokens.find(
+              const usdcToken = moralisData.result.find(
                 (t: any) =>
                   t.token_address.toLowerCase() ===
-                  '0x176211869Ca2B568f2A7D4EE941E073a821EE1ff'.toLowerCase(),
+                  '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85'.toLowerCase(),
               )
 
               // Format balance considering decimals
@@ -73,7 +76,10 @@ export default function WalletPage() {
                 hatiWalletId: cachedMerchantData.hatiWalletId,
                 cardTier: cachedMerchantData.cardTier,
                 balance: formattedBalance,
-                network: 'Linea',
+                network: {
+                  receive: 'Optimism',
+                  withdraw: 'Linea',
+                },
               })
               setIsLoading(false)
               return
@@ -120,15 +126,15 @@ export default function WalletPage() {
         if (userData.hatiWalletAddress) {
           try {
             const moralisResponse = await fetch(
-              `/api/moralis/tokens?address=${userData.hatiWalletAddress}&chain=linea`,
+              `/api/moralis/tokens?address=${userData.hatiWalletAddress}&chain=optimism`,
             )
             if (moralisResponse.ok) {
               const moralisData = await moralisResponse.json()
               if (moralisData.success) {
-                const usdcToken = moralisData.tokens.find(
+                const usdcToken = moralisData.result.find(
                   (t: any) =>
                     t.token_address.toLowerCase() ===
-                    '0x176211869Ca2B568f2A7D4EE941E073a821EE1ff'.toLowerCase(),
+                    '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85'.toLowerCase(),
                 )
                 // Format balance considering decimals
                 balance = usdcToken
@@ -160,7 +166,10 @@ export default function WalletPage() {
           hatiWalletId: userData.hatiWalletId,
           cardTier: userData.cardTier,
           balance: balance,
-          network: 'Linea',
+          network: {
+            receive: 'Optimism',
+            withdraw: 'Linea',
+          },
         })
 
         setIsLoading(false)
@@ -191,7 +200,7 @@ export default function WalletPage() {
 
       // Force refresh balance from Moralis API
       const response = await fetch(
-        `/api/moralis/tokens?address=${walletData.hatiWalletAddress}&chain=linea`,
+        `/api/moralis/tokens?address=${walletData.hatiWalletAddress}&chain=optimism`,
       )
 
       if (!response.ok) {
@@ -204,10 +213,10 @@ export default function WalletPage() {
         throw new Error(result.error || 'Balance refresh failed')
       }
 
-      const usdcToken = result.tokens.find(
+      const usdcToken = result.result.find(
         (t: any) =>
           t.token_address.toLowerCase() ===
-          '0x176211869Ca2B568f2A7D4EE941E073a821EE1ff'.toLowerCase(),
+          '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85'.toLowerCase(),
       )
 
       // Format balance considering decimals
@@ -316,7 +325,6 @@ export default function WalletPage() {
             />
             Refresh
           </Button>
-          ``
         </div>
 
         {/* Wallet Overview */}
@@ -344,9 +352,15 @@ export default function WalletPage() {
                   <span className="text-sm font-medium text-gray-600">
                     Available Balance
                   </span>
-                  <span className="text-sm text-gray-500">
-                    {walletData.network}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-500">
+                      Receive on {walletData.network.receive}
+                    </span>
+                    <span className="text-sm text-gray-500">•</span>
+                    <span className="text-sm text-gray-500">
+                      Withdraw to {walletData.network.withdraw}
+                    </span>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between">
                   <span
@@ -466,8 +480,9 @@ export default function WalletPage() {
       <WithdrawModal
         isOpen={showWithdrawModal}
         onClose={() => setShowWithdrawModal(false)}
-        merchantAddress={walletData.walletAddress}
-        hatiWalletAddress={walletData.hatiWalletAddress}
+        merchantAddress={walletData?.walletAddress || ''}
+        hatiWalletAddress={walletData?.hatiWalletAddress || ''}
+        hatiWalletId={walletData?.hatiWalletId || ''}
       />
     </MerchantDashboardLayout>
   )

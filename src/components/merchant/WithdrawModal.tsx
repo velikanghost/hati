@@ -9,51 +9,49 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useLiFiBridge } from '@/hooks/useLiFiBridge'
+import { useCircleWallet } from '@/hooks/useCircleWallet'
 import { toast } from 'sonner'
 import { LoadingIcon } from '@/components/icons/loadingIcon'
-
-const LINEA_USDC = '0x176211869Ca2B568f2A7D4EE941E073a821EE1ff'
 
 interface WithdrawModalProps {
   isOpen: boolean
   onClose: () => void
   merchantAddress: string
   hatiWalletAddress: string
+  hatiWalletId: string
 }
 
 export const WithdrawModal = ({
   isOpen,
   onClose,
   merchantAddress,
-  hatiWalletAddress,
+  hatiWalletId,
 }: WithdrawModalProps) => {
   const [balance, setBalance] = useState<string>('0')
   const [amount, setAmount] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
   const [isWithdrawing, setIsWithdrawing] = useState(false)
+  const [transactionId, setTransactionId] = useState<string | null>(null)
 
-  const { executePayment } = useLiFiBridge()
+  const { getWalletBalance } = useCircleWallet()
 
-  // Fetch USDC balance using Moralis when modal opens
+  // Fetch USDC balance when modal opens
   useEffect(() => {
     const fetchBalance = async () => {
-      if (!isOpen || !hatiWalletAddress) return
+      if (!isOpen || !hatiWalletId) return
 
       setIsLoading(true)
       try {
-        const response = await fetch(
-          `/api/moralis/tokens?address=${hatiWalletAddress}&chain=linea`,
-        )
-        const data = await response.json()
+        console.log('hatiWalletId', hatiWalletId)
 
-        if (data.success) {
-          const usdcToken = data.tokens.find(
-            (t: any) =>
-              t.token_address.toLowerCase() === LINEA_USDC.toLowerCase(),
-          )
-          setBalance(usdcToken?.amount_formatted || '0')
-        }
+        const response = await getWalletBalance(hatiWalletId)
+
+        console.log('response', response)
+        const formattedBalance = (
+          parseFloat(response.totalUsdcBalance) / 1e6
+        ).toFixed(2)
+
+        setBalance(formattedBalance)
       } catch (error) {
         console.error('Failed to fetch balance:', error)
         toast.error('Failed to fetch balance')
@@ -63,7 +61,45 @@ export const WithdrawModal = ({
     }
 
     fetchBalance()
-  }, [isOpen, hatiWalletAddress])
+  }, [isOpen, hatiWalletId])
+
+  // Poll for transaction status
+  useEffect(() => {
+    if (!transactionId) return
+
+    const checkStatus = async () => {
+      try {
+        const response = await fetch('/api/circle/wallet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'getTransactionStatus',
+            transactionId,
+          }),
+        })
+
+        const data = await response.json()
+        if (data.success) {
+          if (data.data.state === 'COMPLETE') {
+            toast.success('Withdrawal completed successfully!')
+            setTransactionId(null)
+            setIsWithdrawing(false)
+            onClose()
+          } else if (data.data.state === 'FAILED') {
+            throw new Error('Transaction failed')
+          }
+        }
+      } catch (error: any) {
+        console.error('Transaction status check failed:', error)
+        toast.error(error.message || 'Transaction failed')
+        setTransactionId(null)
+        setIsWithdrawing(false)
+      }
+    }
+
+    const interval = setInterval(checkStatus, 5000) // Check every 5 seconds
+    return () => clearInterval(interval)
+  }, [transactionId, onClose])
 
   const handleWithdraw = async () => {
     if (!amount || parseFloat(amount) <= 0) {
@@ -78,52 +114,27 @@ export const WithdrawModal = ({
 
     setIsWithdrawing(true)
     try {
-      // Get route from LiFi
-      const route = await fetch('/api/lifi/bridge', {
+      const response = await fetch('/api/circle/wallet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          fromChain: 59144, // Linea
-          toChain: 59144, // Linea (same chain transfer)
-          fromToken: LINEA_USDC,
-          toToken: LINEA_USDC,
-          fromAmount: amount,
-          fromAddress: hatiWalletAddress,
-          toAddress: merchantAddress,
+          action: 'transferUsdc',
+          walletId: hatiWalletId,
+          destinationAddress: merchantAddress,
+          amount: amount,
         }),
-      }).then((r) => r.json())
-
-      if (!route?.bestRoute) {
-        throw new Error('No route found')
-      }
-
-      // Execute the withdrawal
-      const result = await executePayment(route.bestRoute, {
-        onProgress: (route) => {
-          console.log(
-            'Withdrawal progress:',
-            route.steps.map((step) => ({
-              status: step.execution?.status,
-              txHash: step.execution?.process?.find((p) => p.txHash)?.txHash,
-            })),
-          )
-        },
-        onSuccess: (result) => {
-          toast.success('Withdrawal completed successfully!')
-          onClose()
-        },
-        onError: (error) => {
-          toast.error(`Withdrawal failed: ${error}`)
-        },
       })
 
-      if (!result.success) {
-        throw new Error(result.error || 'Withdrawal failed')
+      const data = await response.json()
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to initiate transfer')
       }
+
+      setTransactionId(data.data.id)
+      toast.success('Transfer initiated! Please wait for confirmation...')
     } catch (error: any) {
       console.error('Withdrawal failed:', error)
       toast.error(error.message || 'Withdrawal failed')
-    } finally {
       setIsWithdrawing(false)
     }
   }
@@ -186,7 +197,7 @@ export const WithdrawModal = ({
                 {isWithdrawing ? (
                   <>
                     <LoadingIcon />
-                    <span className="ml-2">Withdrawing...</span>
+                    {transactionId ? 'Processing...' : 'Withdrawing...'}
                   </>
                 ) : (
                   'Withdraw'

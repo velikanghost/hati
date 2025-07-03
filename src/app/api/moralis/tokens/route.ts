@@ -23,7 +23,7 @@ export async function GET(request: Request) {
 
   try {
     const response = await fetch(
-      `https://deep-index.moralis.io/api/v2/${address}/erc20?chain=${chain}`,
+      `https://deep-index.moralis.io/api/v2.2/wallets/${address}/tokens?chain=${chain}`,
       {
         headers: {
           Accept: 'application/json',
@@ -36,8 +36,8 @@ export async function GET(request: Request) {
       throw new Error(`Moralis API error: ${response.statusText}`)
     }
 
-    const tokens = await response.json()
-    return NextResponse.json({ success: true, tokens })
+    const data = await response.json()
+    return NextResponse.json({ success: true, result: data.result })
   } catch (error: any) {
     console.error('Failed to fetch token balances:', error)
     return NextResponse.json(

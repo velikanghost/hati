@@ -1,5 +1,6 @@
 import { createConfig, EVM } from '@lifi/sdk'
 import { createWalletClient, custom } from 'viem'
+import { mainnet } from 'viem/chains'
 
 export const initializeLiFiSDK = (provider: any, account: string) => {
   try {
@@ -32,14 +33,40 @@ export const initializeLiFiSDK = (provider: any, account: string) => {
       return false
     }
 
-    // Create wallet client using MetaMask provider
-    console.log('🔄 Creating wallet client...')
-    const walletClient = createWalletClient({
-      account: account as `0x${string}`,
-      transport: custom(provider),
-    })
+    // Get current chain ID from provider
+    const getCurrentChainId = async () => {
+      try {
+        const chainIdHex = await provider.request({ method: 'eth_chainId' })
+        return parseInt(chainIdHex, 16)
+      } catch (error) {
+        console.warn(
+          'Failed to get chain ID from provider, using mainnet:',
+          error,
+        )
+        return 1 // Default to mainnet
+      }
+    }
 
-    console.log('✅ Wallet client created')
+    // Create wallet client using MetaMask provider
+    const setupWalletClient = async () => {
+      const chainId = await getCurrentChainId()
+      console.log('🔄 Creating wallet client for chain:', chainId)
+
+      return createWalletClient({
+        account: account as `0x${string}`,
+        transport: custom(provider),
+        chain: {
+          id: chainId,
+          name: 'Chain ' + chainId,
+          network: 'ethereum',
+          nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
+          rpcUrls: {
+            default: { http: [''] }, // Empty as we're using the provider directly
+            public: { http: [''] },
+          },
+        },
+      })
+    }
 
     // Configure LiFi SDK with EVM provider
     console.log('🔄 Configuring LiFi SDK...')
@@ -49,7 +76,7 @@ export const initializeLiFiSDK = (provider: any, account: string) => {
         EVM({
           getWalletClient: async () => {
             console.log('🔄 Getting wallet client for LiFi...')
-            return walletClient
+            return setupWalletClient()
           },
           switchChain: async (chainId) => {
             try {
@@ -59,11 +86,8 @@ export const initializeLiFiSDK = (provider: any, account: string) => {
                 params: [{ chainId: `0x${chainId.toString(16)}` }],
               })
 
-              // Return updated wallet client
-              return createWalletClient({
-                account: account as `0x${string}`,
-                transport: custom(provider),
-              })
+              // Return updated wallet client with new chain
+              return setupWalletClient()
             } catch (error) {
               console.error('❌ Chain switch failed:', error)
               throw error

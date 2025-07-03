@@ -1,4 +1,8 @@
-import { initiateDeveloperControlledWalletsClient } from '@circle-fin/developer-controlled-wallets'
+import {
+  Blockchain,
+  CircleDeveloperControlledWalletsClient,
+  initiateDeveloperControlledWalletsClient,
+} from '@circle-fin/developer-controlled-wallets'
 import { HATI_CONFIG } from '@/lib/data/hati-config'
 
 interface TokenBalance {
@@ -31,8 +35,8 @@ interface CircleWalletInfo {
 }
 
 export class CircleWalletService {
-  private circleSdk: any
-  private readonly SUPPORTED_BLOCKCHAINS = ['EVM']
+  private circleSdk: CircleDeveloperControlledWalletsClient
+  private readonly SUPPORTED_BLOCKCHAINS: Blockchain[] = ['EVM']
   private readonly MERCHANT_USDC_ADDRESS = HATI_CONFIG.MERCHANT_NETWORK.usdc
   private readonly RATE_LIMIT_DELAY = 1000 // 1 second between requests
 
@@ -169,6 +173,7 @@ export class CircleWalletService {
         await this.rateLimitDelay() // Add delay between calls
         const balanceResponse = await this.circleSdk.getWalletTokenBalance({
           id: walletId,
+          includeAll: true,
         })
 
         if (balanceResponse?.data?.tokenBalances) {
@@ -182,7 +187,13 @@ export class CircleWalletService {
       } catch (error: any) {
         console.error(
           'Failed to get token balances (continuing with empty balances):',
-          error,
+          {
+            error: error.message,
+            status: error.response?.status,
+            data: error.response?.data,
+            walletId,
+            blockchain: 'EVM',
+          },
         )
         // Don't throw here - continue with empty token balances
         tokenBalances = []
@@ -331,10 +342,111 @@ export class CircleWalletService {
 
       return {
         signedTransaction: response.data?.signedTransaction || '',
-        transactionHash: response.data?.transactionHash,
+        transactionHash: response.data?.txHash,
       }
     } catch (error: any) {
       this.handleCircleError(error, 'signTransaction')
+    }
+  }
+
+  /**
+   * Transfer USDC from Hati wallet to merchant's wallet
+   */
+  async transferUsdc(
+    walletId: string,
+    destinationAddress: string,
+    amount: string,
+  ): Promise<{
+    id: string
+    state: string
+  }> {
+    try {
+      if (!walletId) {
+        throw new Error('Wallet ID is required')
+      }
+
+      if (!this.isValidWalletId(walletId)) {
+        throw new Error(`Invalid wallet ID format: ${walletId}`)
+      }
+
+      if (!this.isValidAddress(destinationAddress)) {
+        throw new Error(`Invalid destination address: ${destinationAddress}`)
+      }
+
+      await this.rateLimitDelay()
+
+      console.log(`🔄 Initiating USDC transfer from wallet ${walletId}`)
+
+      // Get USDC token ID first
+      const balanceData = await this.getWalletBalance(walletId)
+      const usdcToken = balanceData.tokenBalances.find(
+        (t) =>
+          t.symbol === 'USDC' &&
+          t.contractAddress?.toLowerCase() ===
+            this.MERCHANT_USDC_ADDRESS.toLowerCase(),
+      )
+
+      if (!usdcToken) {
+        throw new Error('USDC token not found in wallet')
+      }
+
+      // Create the transfer transaction
+      const response = await this.circleSdk.createTransaction({
+        walletId,
+        tokenId: usdcToken.token,
+        destinationAddress,
+        amount: [amount],
+        fee: {
+          type: 'level',
+          config: {
+            feeLevel: 'MEDIUM',
+          },
+        },
+      })
+
+      if (!response?.data) {
+        throw new Error('Empty response from Circle API')
+      }
+
+      console.log(`✅ Transfer initiated: ${response.data.id}`)
+
+      return {
+        id: response.data.id,
+        state: response.data.state,
+      }
+    } catch (error: any) {
+      this.handleCircleError(error, 'transferUsdc')
+    }
+  }
+
+  /**
+   * Get transaction status
+   */
+  async getTransactionStatus(transactionId: string): Promise<{
+    state: string
+    txHash?: string
+  }> {
+    try {
+      if (!transactionId) {
+        throw new Error('Transaction ID is required')
+      }
+
+      await this.rateLimitDelay()
+
+      const response = await this.circleSdk.getTransaction({
+        id: transactionId,
+      })
+
+      if (!response?.data?.transaction) {
+        throw new Error('Transaction not found')
+      }
+
+      return {
+        state: response.data.transaction.state,
+        txHash: response.data.transaction.txHash,
+      }
+    } catch (error: any) {
+      this.handleCircleError(error, 'getTransactionStatus')
     }
   }
 

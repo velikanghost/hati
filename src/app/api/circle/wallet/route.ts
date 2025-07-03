@@ -22,7 +22,65 @@ interface HatiWallet {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { action, userAddress, cardTier, walletId, transaction } = body
+    const {
+      action,
+      userAddress,
+      cardTier,
+      walletId,
+      transaction,
+      destinationAddress,
+      amount,
+      transactionId,
+    } = body
+
+    if (action === 'transferUsdc') {
+      if (!walletId || !destinationAddress || !amount) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'walletId, destinationAddress, and amount are required',
+          },
+          { status: 400 },
+        )
+      }
+
+      try {
+        const result = await circleWalletService.transferUsdc(
+          walletId,
+          destinationAddress,
+          amount,
+        )
+        return NextResponse.json({ success: true, data: result })
+      } catch (error: any) {
+        console.error('USDC transfer failed:', error)
+        return NextResponse.json(
+          { success: false, error: error.message },
+          { status: 500 },
+        )
+      }
+    }
+
+    if (action === 'getTransactionStatus') {
+      if (!transactionId) {
+        return NextResponse.json(
+          { success: false, error: 'transactionId is required' },
+          { status: 400 },
+        )
+      }
+
+      try {
+        const status = await circleWalletService.getTransactionStatus(
+          transactionId,
+        )
+        return NextResponse.json({ success: true, data: status })
+      } catch (error: any) {
+        console.error('Transaction status check failed:', error)
+        return NextResponse.json(
+          { success: false, error: error.message },
+          { status: 500 },
+        )
+      }
+    }
 
     if (action === 'createWallet') {
       if (!userAddress || !cardTier) {
