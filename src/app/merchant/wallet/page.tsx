@@ -13,10 +13,12 @@ import {
 import { HiOutlineDocumentDuplicate } from 'react-icons/hi'
 import MerchantDashboardLayout from '@/components/layouts/merchantDashboard'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { merchantStorage } from '@/lib/merchantStorage'
+import { WithdrawModal } from '@/components/merchant/WithdrawModal'
+import { LoadingIcon } from '@/components/icons/loadingIcon'
 
 interface WalletData {
   walletAddress: string
@@ -32,6 +34,7 @@ export default function WalletPage() {
   const [showPrivateKey, setShowPrivateKey] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false)
 
   // Fetch real wallet data from API using existing auth pattern
   useEffect(() => {
@@ -40,23 +43,36 @@ export default function WalletPage() {
         // First try to load merchant data from localStorage (same as overview page)
         const cachedMerchantData = merchantStorage.load()
         if (cachedMerchantData && cachedMerchantData.hatiWalletId) {
-          // We have cached data with wallet ID, fetch balance directly
+          // We have cached data with wallet ID, fetch balance from Moralis
           console.log('Loading wallet data from cached merchant profile')
 
-          const balanceResponse = await fetch(
-            `/api/merchant/balance?walletId=${cachedMerchantData.hatiWalletId}`,
+          const moralisResponse = await fetch(
+            `/api/moralis/tokens?address=${cachedMerchantData.hatiWalletAddress}&chain=linea`,
           )
 
-          if (balanceResponse.ok) {
-            const balanceData = await balanceResponse.json()
+          if (moralisResponse.ok) {
+            const moralisData = await moralisResponse.json()
+            if (moralisData.success) {
+              const usdcToken = moralisData.tokens.find(
+                (t: any) =>
+                  t.token_address.toLowerCase() ===
+                  '0x176211869Ca2B568f2A7D4EE941E073a821EE1ff'.toLowerCase(),
+              )
 
-            if (balanceData.success) {
+              // Format balance considering decimals
+              const formattedBalance = usdcToken
+                ? (
+                    parseFloat(usdcToken.balance) /
+                    Math.pow(10, usdcToken.decimals)
+                  ).toFixed(2)
+                : '0.00'
+
               setWalletData({
                 walletAddress: cachedMerchantData.walletAddress,
                 hatiWalletAddress: cachedMerchantData.hatiWalletAddress || '',
                 hatiWalletId: cachedMerchantData.hatiWalletId,
                 cardTier: cachedMerchantData.cardTier,
-                balance: balanceData.data.formattedUsdcBalance,
+                balance: formattedBalance,
                 network: 'Linea',
               })
               setIsLoading(false)
@@ -99,17 +115,28 @@ export default function WalletPage() {
 
         const userData = await response.json()
 
-        // Fetch balance using wallet ID
-        let balanceData = { formattedUsdcBalance: '0.00' }
-        if (userData.hatiWalletId) {
+        // Fetch balance using Moralis
+        let balance = '0.00'
+        if (userData.hatiWalletAddress) {
           try {
-            const balanceResponse = await fetch(
-              `/api/merchant/balance?walletId=${userData.hatiWalletId}`,
+            const moralisResponse = await fetch(
+              `/api/moralis/tokens?address=${userData.hatiWalletAddress}&chain=linea`,
             )
-            if (balanceResponse.ok) {
-              const result = await balanceResponse.json()
-              if (result.success) {
-                balanceData = result.data
+            if (moralisResponse.ok) {
+              const moralisData = await moralisResponse.json()
+              if (moralisData.success) {
+                const usdcToken = moralisData.tokens.find(
+                  (t: any) =>
+                    t.token_address.toLowerCase() ===
+                    '0x176211869Ca2B568f2A7D4EE941E073a821EE1ff'.toLowerCase(),
+                )
+                // Format balance considering decimals
+                balance = usdcToken
+                  ? (
+                      parseFloat(usdcToken.balance) /
+                      Math.pow(10, usdcToken.decimals)
+                    ).toFixed(2)
+                  : '0.00'
               }
             }
           } catch (balanceError) {
@@ -132,7 +159,7 @@ export default function WalletPage() {
           hatiWalletAddress: userData.hatiWalletAddress,
           hatiWalletId: userData.hatiWalletId,
           cardTier: userData.cardTier,
-          balance: balanceData.formattedUsdcBalance,
+          balance: balance,
           network: 'Linea',
         })
 
@@ -158,21 +185,14 @@ export default function WalletPage() {
   const refreshBalance = async () => {
     setIsRefreshing(true)
     try {
-      if (!walletData?.hatiWalletId) {
-        throw new Error('No wallet ID found')
+      if (!walletData?.hatiWalletAddress) {
+        throw new Error('No wallet address found')
       }
 
-      // Force refresh balance from Circle API using wallet ID
-      const response = await fetch('/api/merchant/balance', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          walletId: walletData.hatiWalletId,
-          action: 'refresh',
-        }),
-      })
+      // Force refresh balance from Moralis API
+      const response = await fetch(
+        `/api/moralis/tokens?address=${walletData.hatiWalletAddress}&chain=linea`,
+      )
 
       if (!response.ok) {
         throw new Error('Failed to refresh balance')
@@ -184,10 +204,23 @@ export default function WalletPage() {
         throw new Error(result.error || 'Balance refresh failed')
       }
 
+      const usdcToken = result.tokens.find(
+        (t: any) =>
+          t.token_address.toLowerCase() ===
+          '0x176211869Ca2B568f2A7D4EE941E073a821EE1ff'.toLowerCase(),
+      )
+
+      // Format balance considering decimals
+      const formattedBalance = usdcToken
+        ? (
+            parseFloat(usdcToken.balance) / Math.pow(10, usdcToken.decimals)
+          ).toFixed(2)
+        : '0.00'
+
       // Update wallet data with new balance
       setWalletData({
         ...walletData,
-        balance: result.data.formattedUsdcBalance,
+        balance: formattedBalance,
       })
 
       toast.success('Balance refreshed!', {
@@ -239,11 +272,9 @@ export default function WalletPage() {
   if (isLoading) {
     return (
       <MerchantDashboardLayout>
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="text-center">
-            <div className="w-12 h-12 mx-auto mb-4 border-b-2 rounded-full animate-spin border-[#0B263F]"></div>
-            <p style={{ color: '#1D1D22' }}>Loading wallet information...</p>
-          </div>
+        <div className="flex items-center justify-center h-[60vh]">
+          <LoadingIcon />
+          <span className="ml-2">Loading wallet data...</span>
         </div>
       </MerchantDashboardLayout>
     )
@@ -252,25 +283,8 @@ export default function WalletPage() {
   if (!walletData) {
     return (
       <MerchantDashboardLayout>
-        <div className="p-6">
-          <Card className="p-8 text-center">
-            <h2
-              className="mb-4 text-xl font-semibold"
-              style={{ color: '#1D1D22' }}
-            >
-              No Wallet Found
-            </h2>
-            <p className="mb-6 text-gray-600">
-              Unable to load wallet information. Please try again.
-            </p>
-            <Button
-              onClick={() => window.location.reload()}
-              style={{ backgroundColor: '#0B263F' }}
-              className="text-white hover:opacity-90"
-            >
-              Retry
-            </Button>
-          </Card>
+        <div className="text-center">
+          <p>No wallet data found. Please connect your wallet.</p>
         </div>
       </MerchantDashboardLayout>
     )
@@ -302,40 +316,33 @@ export default function WalletPage() {
             />
             Refresh
           </Button>
+          ``
         </div>
 
         {/* Wallet Overview */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Hati Wallet */}
-          <Card className="p-6 bg-white border-0 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h3
-                className="text-lg font-semibold"
-                style={{ color: '#1D1D22' }}
-              >
-                Hati Wallet
-              </h3>
+        <Card className="overflow-hidden bg-white border-0 shadow-sm">
+          <CardHeader className="border-b border-gray-100">
+            <div className="flex items-center justify-between">
+              <CardTitle>Wallet Overview</CardTitle>
               <Badge
-                className={`${
-                  benefits.color === 'purple'
-                    ? 'bg-purple-100 text-purple-700 border-purple-200'
-                    : benefits.color === 'blue'
-                    ? 'bg-blue-100 text-blue-700 border-blue-200'
-                    : 'bg-gray-100 text-gray-700 border-gray-200'
-                }`}
+                variant="outline"
+                className={`px-3 py-1 text-${benefits.color}-600 bg-${benefits.color}-50 border-${benefits.color}-200`}
               >
                 {walletData.cardTier} Tier
               </Badge>
             </div>
+          </CardHeader>
 
-            <div className="space-y-4">
+          <CardContent className="p-6">
+            <div className="space-y-6">
+              {/* Balance Section */}
               <div
-                className="p-4 rounded-lg"
+                className="p-6 rounded-lg"
                 style={{ backgroundColor: '#F1F6FC' }}
               >
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-gray-600">
-                    Balance
+                    Available Balance
                   </span>
                   <span className="text-sm text-gray-500">
                     {walletData.network}
@@ -343,7 +350,7 @@ export default function WalletPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span
-                    className="text-2xl font-bold"
+                    className="text-3xl font-bold"
                     style={{ color: '#1D1D22' }}
                   >
                     ${walletData.balance} USDC
@@ -353,19 +360,29 @@ export default function WalletPage() {
                     <span className="text-sm text-green-600">Active</span>
                   </div>
                 </div>
+
+                <Button
+                  onClick={() => setShowWithdrawModal(true)}
+                  className="mt-4 w-full bg-[#0B263F] text-white hover:bg-[#0B263F]/90"
+                  disabled={parseFloat(walletData.balance) <= 0}
+                >
+                  <RiWallet3Line className="w-4 h-4 mr-2" />
+                  Withdraw to MetaMask
+                </Button>
               </div>
 
-              <div className="space-y-3">
+              {/* Wallet Details */}
+              <div className="space-y-4">
                 <div>
                   <label className="text-sm font-medium text-gray-600">
-                    Wallet Address
+                    Hati Wallet Address
                   </label>
                   <div className="flex items-center gap-2 mt-1">
                     <code
                       className="flex-1 p-2 text-sm rounded bg-gray-50"
                       style={{ color: '#1D1D22' }}
                     >
-                      {walletData.hatiWalletAddress.slice(0, 20)}...
+                      {walletData.hatiWalletAddress}
                     </code>
                     <Button
                       size="sm"
@@ -384,110 +401,51 @@ export default function WalletPage() {
 
                 <div>
                   <label className="text-sm font-medium text-gray-600">
-                    Wallet ID
+                    Connected MetaMask
                   </label>
                   <div className="flex items-center gap-2 mt-1">
                     <code
                       className="flex-1 p-2 text-sm rounded bg-gray-50"
                       style={{ color: '#1D1D22' }}
                     >
-                      {walletData.hatiWalletId}
+                      {walletData.walletAddress}
                     </code>
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() =>
-                        handleCopyAddress(walletData.hatiWalletId, 'Wallet ID')
+                        handleCopyAddress(
+                          walletData.walletAddress,
+                          'MetaMask address',
+                        )
                       }
                     >
                       <RiCopyleftLine className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
-              </div>
-            </div>
-          </Card>
 
-          {/* MetaMask Connection */}
-          <Card className="p-6 bg-white border-0 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h3
-                className="text-lg font-semibold"
-                style={{ color: '#1D1D22' }}
-              >
-                MetaMask Connection
-              </h3>
-              <RiShieldCheckLine className="w-5 h-5 text-green-500" />
-            </div>
-
-            <div className="space-y-4">
-              <div
-                className="p-4 rounded-lg"
-                style={{ backgroundColor: '#F1F6FC' }}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-gray-600">
-                    Connected Address
-                  </span>
-                  <span className="text-sm text-green-600">Verified</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 text-sm" style={{ color: '#1D1D22' }}>
-                    {walletData.walletAddress.slice(0, 20)}...
-                  </code>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      handleCopyAddress(walletData.walletAddress, 'MetaMask')
-                    }
-                  >
-                    <RiCopyleftLine className="w-4 h-4" />
-                  </Button>
+                <div>
+                  <label className="text-sm font-medium text-gray-600">
+                    Card Benefits
+                  </label>
+                  <div className="mt-2 space-y-2">
+                    {benefits.benefits.map((benefit, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-2 p-2 rounded bg-gray-50"
+                      >
+                        <RiShieldCheckLine className="w-4 h-4 text-green-500" />
+                        <span className="text-sm text-gray-700">{benefit}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-
-              <div className="space-y-2">
-                <h4 className="font-medium" style={{ color: '#1D1D22' }}>
-                  Card Benefits Active:
-                </h4>
-                <ul className="space-y-1">
-                  {benefits.benefits.map((benefit, index) => (
-                    <li
-                      key={index}
-                      className="flex items-center gap-2 text-sm text-gray-600"
-                    >
-                      <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-                      {benefit}
-                    </li>
-                  ))}
-                </ul>
-              </div>
             </div>
-          </Card>
-        </div>
-
-        {/* Transaction History */}
-        <Card className="p-6 bg-white border-0 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold" style={{ color: '#1D1D22' }}>
-              Recent Transactions
-            </h3>
-            <Button variant="outline" size="sm">
-              View All <RiExternalLinkLine className="w-4 h-4 ml-2" />
-            </Button>
-          </div>
-
-          <div className="py-8 text-center">
-            <RiWallet3Line className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-            <p className="text-gray-500">No transactions yet</p>
-            <p className="mt-1 text-sm text-gray-400">
-              Transactions will appear here once you start receiving payments
-            </p>
-          </div>
+          </CardContent>
         </Card>
 
-        {/* Circle Branding Footer */}
         <div className="py-4 text-center">
           <p className="text-sm text-gray-500">
             🔐 Powered by{' '}
@@ -503,6 +461,14 @@ export default function WalletPage() {
           </p>
         </div>
       </div>
+
+      {/* Withdraw Modal */}
+      <WithdrawModal
+        isOpen={showWithdrawModal}
+        onClose={() => setShowWithdrawModal(false)}
+        merchantAddress={walletData.walletAddress}
+        hatiWalletAddress={walletData.hatiWalletAddress}
+      />
     </MerchantDashboardLayout>
   )
 }

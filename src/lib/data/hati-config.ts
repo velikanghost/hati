@@ -1,19 +1,19 @@
 export const HATI_CONFIG = {
   MERCHANT_NETWORK: {
-    chainId: 59144, // 0xe708
-    name: 'Linea',
+    chainId: 10, // 0xa
+    name: 'Optimism',
     symbol: 'ETH',
-    explorer: 'https://lineascan.build',
-    rpc: 'https://rpc.linea.build',
-    usdc: '0x176211869cA2b568f2A7D4EE941E073a821EE1ff',
+    explorer: 'https://optimistic.etherscan.io',
+    rpc: 'https://mainnet.optimism.io',
+    usdc: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85', // Native USDC on Optimism
   },
 
   // Circle Wallet Configuration
   CIRCLE_WALLET: {
-    blockchain: 'EVM', // Generic EVM support for Linea
+    blockchain: 'EVM', // Generic EVM support for Optimism
     accountType: 'EOA', // Externally Owned Account (receive-only)
     features: [
-      'USDC receiving on Linea',
+      'USDC receiving on Optimism',
       'Transaction signing',
       'Cross-chain address consistency',
     ],
@@ -23,21 +23,21 @@ export const HATI_CONFIG = {
     { chainId: 1, name: 'Ethereum', symbol: 'ETH' },
     { chainId: 42161, name: 'Arbitrum', symbol: 'ETH' },
     { chainId: 8453, name: 'Base', symbol: 'ETH' },
-    { chainId: 10, name: 'Optimism', symbol: 'ETH' },
+    { chainId: 59144, name: 'Linea', symbol: 'ETH' },
     { chainId: 137, name: 'Polygon', symbol: 'MATIC' },
     { chainId: 56, name: 'BSC', symbol: 'BNB' },
   ],
 
   PAYMENT_FLOW: {
     description:
-      'Users pay from any supported chain → LiFi bridges to Linea → Merchants receive USDC on Linea',
+      'Users pay from any supported chain → LiFi bridges to Optimism → Merchants receive USDC on Optimism',
     userExperience: 'Pay with any token on any chain',
-    merchantExperience: 'Receive USDC on Linea only',
+    merchantExperience: 'Receive USDC on Optimism, withdraw to Linea available',
     settlementTime: '8-20 seconds via CCTP',
   },
 
   METAMASK_CARD: {
-    verificationNetwork: 'Linea',
+    verificationNetwork: 'Optimism',
     benefits: {
       basic: ['Standard transaction processing'],
       premium: ['Reduced fees', 'Priority support'],

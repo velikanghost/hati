@@ -33,7 +33,7 @@ interface CircleWalletInfo {
 export class CircleWalletService {
   private circleSdk: any
   private readonly SUPPORTED_BLOCKCHAINS = ['EVM']
-  private readonly LINEA_USDC_ADDRESS = HATI_CONFIG.MERCHANT_NETWORK.usdc
+  private readonly MERCHANT_USDC_ADDRESS = HATI_CONFIG.MERCHANT_NETWORK.usdc
   private readonly RATE_LIMIT_DELAY = 1000 // 1 second between requests
 
   constructor() {
@@ -204,7 +204,7 @@ export class CircleWalletService {
         (balance) =>
           balance.symbol === 'USDC' ||
           balance.contractAddress?.toLowerCase() ===
-            this.LINEA_USDC_ADDRESS.toLowerCase(),
+            this.MERCHANT_USDC_ADDRESS.toLowerCase(),
       )
 
       const result: WalletBalanceData = {
@@ -356,7 +356,7 @@ export class CircleWalletService {
       ],
       sdkVersion: '8.3.0',
       network: 'Linea Mainnet (59144)',
-      usdcContract: this.LINEA_USDC_ADDRESS,
+      usdcContract: this.MERCHANT_USDC_ADDRESS,
       apiConfigured: !!(
         process.env.CIRCLE_API_KEY && process.env.CIRCLE_ENTITY_SECRET
       ),
