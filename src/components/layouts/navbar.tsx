@@ -26,12 +26,17 @@ const Navbar = () => {
 
   return (
     <>
-      <NavigationMenu className="mx-auto navigation-menu">
+      <NavigationMenu className="mx-auto navigation-menu font-space-grotesk">
         <NavigationMenuList className="container items-center justify-between w-screen pt-2 nav-container">
           <NavigationMenuItem
-            className="py-4 text-2xl font-semibold cursor-pointer text-primary-foreground font-headings"
+            className="py-4 text-2xl cursor-pointer text-[#000000] flex items-center gap-2 font-bold"
             onClick={() => router.push('/')}
           >
+            <img
+              src="/images/hati_logo.png"
+              alt="Hati Logo"
+              className="h-8 w-8 object-contain mr-2"
+            />
             Hati
           </NavigationMenuItem>
 

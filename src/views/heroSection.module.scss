@@ -1,0 +1,9 @@
+.heroBg {
+  width: 100vw;
+  height: 450px;
+  background: linear-gradient(90deg, #FFD28F 0%, #F1A5FB 100%);
+  clip-path: polygon(0 0, 100% 0, 100% 45%, 0 70%);
+  /* Adjust the last two points for the diagonal angle */
+  position: relative;
+  z-index: 1;
+}
