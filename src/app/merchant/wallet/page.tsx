@@ -1,20 +1,22 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import MerchantDashboardLayout from '@/components/layouts/merchantDashboard'
-import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import React, { useState, useEffect } from 'react'
 import {
-  RiWallet3Line,
-  RiExternalLinkLine,
-  RiCopyleftLine,
   RiEyeLine,
   RiEyeOffLine,
   RiRefreshLine,
+  RiCopyleftLine,
+  RiExternalLinkLine,
   RiShieldCheckLine,
+  RiWallet3Line,
 } from 'react-icons/ri'
+import { HiOutlineDocumentDuplicate } from 'react-icons/hi'
+import MerchantDashboardLayout from '@/components/layouts/merchantDashboard'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
+import { merchantStorage } from '@/lib/merchantStorage'
 
 interface WalletData {
   walletAddress: string
@@ -31,24 +33,113 @@ export default function WalletPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  // Mock data for demo - in production, fetch from API
+  // Fetch real wallet data from API using existing auth pattern
   useEffect(() => {
     const fetchWalletData = async () => {
       try {
-        // Simulate API call
-        setTimeout(() => {
-          setWalletData({
-            walletAddress: '0x2cab74bdb5c0eb9e63a03bc9d448a92a201d7c88',
-            hatiWalletAddress: '0x9876543210123456789012345678901234567890',
-            hatiWalletId: '4272fcb5-4593-5b41-b81a-2a9f7c813bb9',
-            cardTier: 'Premium',
-            balance: '1,234.56',
-            network: 'Linea',
-          })
-          setIsLoading(false)
-        }, 1000)
-      } catch (error) {
+        // First try to load merchant data from localStorage (same as overview page)
+        const cachedMerchantData = merchantStorage.load()
+        if (cachedMerchantData && cachedMerchantData.hatiWalletId) {
+          // We have cached data with wallet ID, fetch balance directly
+          console.log('Loading wallet data from cached merchant profile')
+
+          const balanceResponse = await fetch(
+            `/api/merchant/balance?walletId=${cachedMerchantData.hatiWalletId}`,
+          )
+
+          if (balanceResponse.ok) {
+            const balanceData = await balanceResponse.json()
+
+            if (balanceData.success) {
+              setWalletData({
+                walletAddress: cachedMerchantData.walletAddress,
+                hatiWalletAddress: cachedMerchantData.hatiWalletAddress || '',
+                hatiWalletId: cachedMerchantData.hatiWalletId,
+                cardTier: cachedMerchantData.cardTier,
+                balance: balanceData.data.formattedUsdcBalance,
+                network: 'Linea',
+              })
+              setIsLoading(false)
+              return
+            }
+          }
+        }
+
+        // Fallback: Check wallet connection and fetch from API (same as overview page)
+        if (!window.ethereum) {
+          throw new Error('MetaMask not found. Please install MetaMask.')
+        }
+
+        const accounts = await window.ethereum.request({
+          method: 'eth_accounts',
+        })
+
+        if (accounts.length === 0) {
+          throw new Error('No wallet connected. Please connect your wallet.')
+        }
+
+        const address = accounts[0]
+
+        // Fetch merchant profile from API
+        const response = await fetch(
+          `/api/hati/auth/merchant?address=${address}`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          },
+        )
+
+        if (!response.ok) {
+          throw new Error(
+            'Merchant profile not found. Please complete onboarding.',
+          )
+        }
+
+        const userData = await response.json()
+
+        // Fetch balance using wallet ID
+        let balanceData = { formattedUsdcBalance: '0.00' }
+        if (userData.hatiWalletId) {
+          try {
+            const balanceResponse = await fetch(
+              `/api/merchant/balance?walletId=${userData.hatiWalletId}`,
+            )
+            if (balanceResponse.ok) {
+              const result = await balanceResponse.json()
+              if (result.success) {
+                balanceData = result.data
+              }
+            }
+          } catch (balanceError) {
+            console.warn('Failed to fetch balance:', balanceError)
+          }
+        }
+
+        // Map card tier and save to cache
+        const merchantData = {
+          walletAddress: userData.walletAddress,
+          hatiWalletAddress: userData.hatiWalletAddress,
+          hatiWalletId: userData.hatiWalletId,
+          cardTier: userData.cardTier,
+          isNewUser: false,
+        }
+        merchantStorage.save(merchantData)
+
+        setWalletData({
+          walletAddress: userData.walletAddress,
+          hatiWalletAddress: userData.hatiWalletAddress,
+          hatiWalletId: userData.hatiWalletId,
+          cardTier: userData.cardTier,
+          balance: balanceData.formattedUsdcBalance,
+          network: 'Linea',
+        })
+
+        setIsLoading(false)
+      } catch (error: any) {
         console.error('Failed to fetch wallet data:', error)
+        toast.error(error.message || 'Failed to load wallet data')
         setIsLoading(false)
       }
     }
@@ -67,23 +158,47 @@ export default function WalletPage() {
   const refreshBalance = async () => {
     setIsRefreshing(true)
     try {
-      // Simulate balance refresh
-      setTimeout(() => {
-        if (walletData) {
-          setWalletData({
-            ...walletData,
-            balance: (Math.random() * 2000 + 500).toFixed(2),
-          })
-        }
-        setIsRefreshing(false)
-        toast.success('Balance refreshed!', {
-          duration: 2000,
-          position: 'top-center',
-        })
-      }, 1500)
-    } catch (error) {
+      if (!walletData?.hatiWalletId) {
+        throw new Error('No wallet ID found')
+      }
+
+      // Force refresh balance from Circle API using wallet ID
+      const response = await fetch('/api/merchant/balance', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          walletId: walletData.hatiWalletId,
+          action: 'refresh',
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to refresh balance')
+      }
+
+      const result = await response.json()
+
+      if (!result.success) {
+        throw new Error(result.error || 'Balance refresh failed')
+      }
+
+      // Update wallet data with new balance
+      setWalletData({
+        ...walletData,
+        balance: result.data.formattedUsdcBalance,
+      })
+
+      toast.success('Balance refreshed!', {
+        duration: 2000,
+        position: 'top-center',
+      })
+    } catch (error: any) {
+      console.error('Balance refresh error:', error)
+      toast.error(error.message || 'Failed to refresh balance')
+    } finally {
       setIsRefreshing(false)
-      toast.error('Failed to refresh balance')
     }
   }
 

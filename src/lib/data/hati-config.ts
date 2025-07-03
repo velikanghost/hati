@@ -1,12 +1,4 @@
-/**
- * Hati Network Configuration
- *
- * Hati focuses on Linea as the primary network for merchant wallets,
- * while supporting cross-chain payments via LiFi bridge integration.
- */
-
 export const HATI_CONFIG = {
-  // Primary Network (Merchant Wallets)
   MERCHANT_NETWORK: {
     chainId: 59144, // 0xe708
     name: 'Linea',
@@ -25,14 +17,8 @@ export const HATI_CONFIG = {
       'Transaction signing',
       'Cross-chain address consistency',
     ],
-    limitations: [
-      'No Gas Station (merchants pay no gas fees anyway)',
-      'No SCA features (not needed for receive-only wallets)',
-      'No Contract Platform (not needed for payments)',
-    ],
   },
 
-  // Supported Payment Sources (Users can pay from these)
   BRIDGE_SOURCES: [
     { chainId: 1, name: 'Ethereum', symbol: 'ETH' },
     { chainId: 42161, name: 'Arbitrum', symbol: 'ETH' },
@@ -42,7 +28,6 @@ export const HATI_CONFIG = {
     { chainId: 56, name: 'BSC', symbol: 'BNB' },
   ],
 
-  // Payment Flow
   PAYMENT_FLOW: {
     description:
       'Users pay from any supported chain → LiFi bridges to Linea → Merchants receive USDC on Linea',
@@ -51,9 +36,8 @@ export const HATI_CONFIG = {
     settlementTime: '8-20 seconds via CCTP',
   },
 
-  // MetaMask Card Integration
   METAMASK_CARD: {
-    verificationNetwork: 'Linea', // Verify card ownership on Linea
+    verificationNetwork: 'Linea',
     benefits: {
       basic: ['Standard transaction processing'],
       premium: ['Reduced fees', 'Priority support'],

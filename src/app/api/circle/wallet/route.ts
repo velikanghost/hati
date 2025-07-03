@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { initiateDeveloperControlledWalletsClient } from '@circle-fin/developer-controlled-wallets'
+import { circleWalletService } from '@/lib/services/circleWalletService'
 
 interface CreateWalletRequest {
   userAddress: string
@@ -16,170 +16,96 @@ interface HatiWallet {
   createdAt: string
 }
 
-class HatiCircleWalletService {
-  private circleSdk: any
-  private readonly SUPPORTED_BLOCKCHAINS = ['EVM']
-
-  constructor() {
-    if (!process.env.CIRCLE_API_KEY || !process.env.CIRCLE_ENTITY_SECRET) {
-      throw new Error(
-        'Circle API credentials not configured. Please set CIRCLE_API_KEY and CIRCLE_ENTITY_SECRET in your .env file',
-      )
-    }
-
-    this.circleSdk = initiateDeveloperControlledWalletsClient({
-      baseUrl: 'https://api.circle.com',
-      apiKey: process.env.CIRCLE_API_KEY,
-      entitySecret: process.env.CIRCLE_ENTITY_SECRET,
-    })
-  }
-
-  async createHatiWallet(
-    userAddress: string,
-    cardTier: string,
-  ): Promise<HatiWallet> {
-    try {
-      console.log(
-        `🔄 Creating Hati wallet for ${userAddress} with ${cardTier} tier...`,
-      )
-
-      // Create wallet set first (this groups related wallets)
-      const walletSetResponse = await this.circleSdk.createWalletSet({
-        name: `hati-merchant-${userAddress.toLowerCase().slice(0, 8)}`,
-      })
-
-      const walletSetId = walletSetResponse.data?.walletSet?.id
-      if (!walletSetId) {
-        throw new Error('Failed to create wallet set')
-      }
-
-      // Create the actual wallet
-      const walletResponse = await this.circleSdk.createWallets({
-        accountType: 'EOA',
-        blockchains: this.SUPPORTED_BLOCKCHAINS,
-        count: 1,
-        walletSetId: walletSetId,
-      })
-
-      const wallet = walletResponse.data?.wallets?.[0]
-      if (!wallet) {
-        throw new Error('Failed to create wallet')
-      }
-
-      console.log(`✅ Hati wallet created: ${wallet.id}`)
-
-      return {
-        id: wallet.id,
-        address: wallet.address,
-        blockchain: wallet.blockchain,
-        walletType: 'merchant',
-        userId: userAddress,
-        network: this.getNetworkName(wallet.blockchain),
-        createdAt: new Date().toISOString(),
-      }
-    } catch (error: any) {
-      console.error('❌ Error creating Hati wallet:', error)
-      throw new Error(`Failed to create Hati wallet: ${error.message}`)
-    }
-  }
-
-  async getWalletBalance(walletId: string) {
-    try {
-      const response = await this.circleSdk.getWallet({ id: walletId })
-      const balanceResponse = await this.circleSdk.getWalletTokenBalance({
-        id: walletId,
-      })
-
-      return {
-        walletId,
-        address: response.data?.wallet?.address,
-        blockchain: response.data?.wallet?.blockchain,
-        balances: balanceResponse.data?.tokenBalances || [],
-        nativeBalance: response.data?.wallet?.balance || '0',
-      }
-    } catch (error: any) {
-      console.error('Error getting wallet balance:', error)
-      throw new Error(`Failed to get wallet balance: ${error.message}`)
-    }
-  }
-
-  async signTransaction(walletId: string, transaction: any) {
-    try {
-      const response = await this.circleSdk.signTransaction({
-        walletId,
-        transaction: JSON.stringify(transaction),
-      })
-
-      return {
-        signedTransaction: response.data?.signedTransaction,
-        transactionHash: response.data?.transactionHash,
-      }
-    } catch (error: any) {
-      console.error('Error signing transaction:', error)
-      throw new Error(`Failed to sign transaction: ${error.message}`)
-    }
-  }
-
-  private getNetworkName(blockchain: string): string {
-    if (blockchain === 'EVM') {
-      return 'Linea'
-    }
-    return blockchain
-  }
-
-  getWalletInfo() {
-    return {
-      supportedBlockchains: this.SUPPORTED_BLOCKCHAINS,
-      features: [
-        'Linea-focused merchant wallets using Circle EVM support',
-        'USDC-focused payment processing on Linea',
-        'EOA wallet generation for receiving payments',
-        'Cross-chain payment bridging via LiFi',
-        'Enterprise-grade security',
-      ],
-      sdkVersion: '8.3.0',
-      network: 'Linea Mainnet (59144)',
-      note: 'Hati uses Circle generic EVM support for Linea merchant wallets',
-    }
-  }
-}
-
-// Initialize the service
-const hatiWalletService = new HatiCircleWalletService()
+// Use the enhanced service from our services directory
+// The HatiCircleWalletService is now replaced by the enhanced CircleWalletService
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { userAddress, cardTier } = body as CreateWalletRequest
+    const { action, userAddress, cardTier, walletId, transaction } = body
 
-    if (!userAddress) {
-      return NextResponse.json(
-        { error: 'userAddress is required' },
-        { status: 400 },
+    if (action === 'createWallet') {
+      if (!userAddress || !cardTier) {
+        return NextResponse.json(
+          { success: false, error: 'userAddress and cardTier are required' },
+          { status: 400 },
+        )
+      }
+
+      console.log(
+        `🔄 Creating Hati wallet for ${userAddress} with ${cardTier} tier`,
       )
+
+      try {
+        const wallet = await circleWalletService.createMerchantWallet(
+          userAddress,
+          cardTier,
+        )
+
+        return NextResponse.json({
+          success: true,
+          data: wallet,
+        })
+      } catch (error: any) {
+        console.error('Wallet creation failed:', error)
+        return NextResponse.json(
+          { success: false, error: error.message },
+          { status: 500 },
+        )
+      }
     }
 
-    // Validate card tier
-    const validTiers = ['basic', 'premium', 'elite']
-    if (cardTier && !validTiers.includes(cardTier)) {
-      return NextResponse.json(
-        { error: 'Invalid card tier. Must be basic, premium, or elite' },
-        { status: 400 },
-      )
+    if (action === 'getBalance') {
+      if (!walletId) {
+        return NextResponse.json(
+          { success: false, error: 'walletId is required' },
+          { status: 400 },
+        )
+      }
+
+      try {
+        const balance = await circleWalletService.getWalletBalance(walletId)
+        return NextResponse.json({ success: true, data: balance })
+      } catch (error: any) {
+        console.error('Balance fetch failed:', error)
+        return NextResponse.json(
+          { success: false, error: error.message },
+          { status: 500 },
+        )
+      }
     }
 
-    const wallet = await hatiWalletService.createHatiWallet(
-      userAddress,
-      cardTier || 'basic',
-    )
+    if (action === 'signTransaction') {
+      if (!walletId || !transaction) {
+        return NextResponse.json(
+          { success: false, error: 'walletId and transaction are required' },
+          { status: 400 },
+        )
+      }
 
-    console.log(`✅ Hati wallet API success: ${wallet.id} for ${userAddress}`)
+      try {
+        const result = await circleWalletService.signTransaction(
+          walletId,
+          transaction,
+        )
+        return NextResponse.json({ success: true, data: result })
+      } catch (error: any) {
+        console.error('Transaction signing failed:', error)
+        return NextResponse.json(
+          { success: false, error: error.message },
+          { status: 500 },
+        )
+      }
+    }
 
-    return NextResponse.json(wallet)
-  } catch (error: any) {
-    console.error('❌ Hati wallet API error:', error)
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { success: false, error: 'Invalid action' },
+      { status: 400 },
+    )
+  } catch (error: any) {
+    console.error('POST /api/circle/wallet error:', error)
+    return NextResponse.json(
+      { success: false, error: error.message || 'Internal server error' },
       { status: 500 },
     )
   }
@@ -192,18 +118,82 @@ export async function GET(request: NextRequest) {
     const action = searchParams.get('action')
 
     if (action === 'info') {
-      return NextResponse.json(hatiWalletService.getWalletInfo())
+      return NextResponse.json(circleWalletService.getServiceInfo())
+    }
+
+    if (action === 'test') {
+      console.log('🧪 Testing Circle API connection...')
+      const testResult = await circleWalletService.testConnection()
+
+      return NextResponse.json({
+        ...testResult,
+        timestamp: new Date().toISOString(),
+        environment: {
+          hasApiKey: !!process.env.CIRCLE_API_KEY,
+          hasEntitySecret: !!process.env.CIRCLE_ENTITY_SECRET,
+          apiKeyPrefix: process.env.CIRCLE_API_KEY?.substring(0, 8) + '...',
+        },
+      })
     }
 
     if (walletId && action === 'balance') {
-      const balance = await hatiWalletService.getWalletBalance(walletId)
-      return NextResponse.json(balance)
+      console.log(`🔍 Fetching balance for wallet: ${walletId}`)
+
+      try {
+        const balance = await circleWalletService.getWalletBalance(walletId)
+        return NextResponse.json({
+          success: true,
+          data: balance,
+          timestamp: new Date().toISOString(),
+        })
+      } catch (error: any) {
+        console.error('Balance fetch failed:', error)
+        return NextResponse.json(
+          {
+            success: false,
+            error: error.message,
+            walletId,
+            timestamp: new Date().toISOString(),
+          },
+          { status: 500 },
+        )
+      }
+    }
+
+    if (walletId && action === 'info') {
+      console.log(`🔍 Fetching info for wallet: ${walletId}`)
+
+      try {
+        const info = await circleWalletService.getWalletInfo(walletId)
+        return NextResponse.json({
+          success: true,
+          data: info,
+          timestamp: new Date().toISOString(),
+        })
+      } catch (error: any) {
+        console.error('Wallet info fetch failed:', error)
+        return NextResponse.json(
+          {
+            success: false,
+            error: error.message,
+            walletId,
+            timestamp: new Date().toISOString(),
+          },
+          { status: 500 },
+        )
+      }
     }
 
     return NextResponse.json(
       {
         error:
-          'Invalid request. Specify action=info or action=balance&walletId=<id>',
+          'Invalid request. Available actions: info, test, balance, or wallet info',
+        usage: {
+          serviceInfo: '?action=info',
+          testConnection: '?action=test',
+          walletBalance: '?action=balance&walletId=<id>',
+          walletInfo: '?action=info&walletId=<id>',
+        },
       },
       { status: 400 },
     )
