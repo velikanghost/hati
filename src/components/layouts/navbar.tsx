@@ -35,7 +35,7 @@ const Navbar = () => {
             Hati
           </NavigationMenuItem>
 
-          {pathname?.includes('/demo') ? (
+          {pathname?.includes('/shoppers') ? (
             <Button
               variant="nav"
               className="flex items-center gap-3 btn-primary hover:animate-pulse"
@@ -71,7 +71,7 @@ const Navbar = () => {
 
                 <div className="flex gap-4">
                   <Link
-                    href="/demo"
+                    href="/shoppers"
                     passHref
                     className="trydemo_btn bg-[#EBE8E2] text-secondary-foreground hover:bg-[#EBE8E2]/90 hover:animate-pulse font-medium text-base"
                   >
