@@ -1,10 +1,7 @@
 import { useState } from 'react'
 import { BiLeftArrowAlt } from 'react-icons/bi'
 import { useAppSelector, useAppDispatch } from '@/store/hooks'
-import {
-  setMerchantAmount,
-  setMerchantAddress,
-} from '@/store/slices/connectSlice'
+import { setMerchantAmount, setMerchantId } from '@/store/slices/connectSlice'
 import { Tab } from '@/lib/types/all'
 import { Button } from '@/components/ui/button'
 
@@ -14,18 +11,18 @@ interface SelectTokenProps {
 
 const SetMerchant = ({ setActiveTab }: SelectTokenProps) => {
   const dispatch = useAppDispatch()
-  const { merchantAmount, merchantAddress } = useAppSelector(
+  const { merchantAmount, merchantId } = useAppSelector(
     (state) => state.connect,
   )
 
   const [data, setData] = useState({
     amt: merchantAmount,
-    addr: merchantAddress,
+    id: merchantId,
   })
 
   const setMerchant = async () => {
     dispatch(setMerchantAmount(data.amt))
-    dispatch(setMerchantAddress(data.addr))
+    dispatch(setMerchantId(data.id))
     setActiveTab('DEFAULT')
   }
 
@@ -55,16 +52,16 @@ const SetMerchant = ({ setActiveTab }: SelectTokenProps) => {
             }))
           }
         />
-        <label htmlFor="">Address</label>
+        <label htmlFor="">Hati Merchant ID (e.g., HT-123)</label>
         <input
           type="text"
           name="address"
           className="px-4 py-3 mt-2 mb-3 rounded text-secondary-foreground"
-          placeholder="Wallet address"
+          placeholder="HT-123"
           onChange={(e) =>
             setData((prev) => ({
               ...prev,
-              addr: e.target.value,
+              id: e.target.value,
             }))
           }
         />

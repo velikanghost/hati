@@ -9,22 +9,22 @@ import { Card, CardContent } from '@/components/ui/card'
 import { ChevronDown, Wallet, Shield, Store } from 'lucide-react'
 import { useTokenBalances, TokenBalance } from '@/hooks/useTokenBalances'
 import { TokenSelectModal } from '@/components/tokenSelectModal'
+import SetMerchant from '@/components/setMerchant'
+import { Tab } from '@/lib/types/all'
 
 const Shopper = () => {
   const dispatch = useAppDispatch()
-  const { userEvmAccount, cardTier } = useAppSelector((state) => state.connect)
+  const { userEvmAccount, cardTier, merchantAmount, merchantId } =
+    useAppSelector((state) => state.connect)
 
   const hasCheckedInitialConnection = useRef(false)
-  const [amount, setAmount] = useState('5')
   const [showTokenModal, setShowTokenModal] = useState(false)
   const [selectedToken, setSelectedToken] = useState<TokenBalance | null>(null)
-  const [showChainSelector, setShowChainSelector] = useState(false)
+  const [activeTabState, setActiveTabState] = useState<Tab>('DEFAULT')
 
   const { connectWallet, account } = useMetaMask()
 
-  // Mock merchant details for demo
   const merchantName = 'Hati'
-  const merchantAddress = '0x0cf7.....7842ce'
 
   const getAccount = useCallback(async () => {
     try {
@@ -75,17 +75,48 @@ const Shopper = () => {
       return
     }
 
-    try {
-      toast.success('Payment completed successfully!', {
-        duration: 3000,
-        position: 'top-center',
-      })
-    } catch (error: any) {
-      toast.error(error?.message || error || 'Transfer failed', {
-        duration: 3000,
-        position: 'top-center',
-      })
+    if (!selectedToken) {
+      toast('Select a token first!', { duration: 2000, position: 'top-center' })
+      return
     }
+
+    try {
+      const symbolToId: Record<string, string> = {
+        ETH: 'ethereum',
+        USDC: 'usd-coin',
+        USDT: 'tether',
+        BNB: 'binancecoin',
+        POL: 'matic-network',
+      }
+      const coingeckoId = symbolToId[selectedToken.symbol.toUpperCase()] || ''
+      let tokenPrice = 0
+      if (coingeckoId) {
+        const priceRes = await fetch(
+          `https://api.coingecko.com/api/v3/simple/price?ids=${coingeckoId}&vs_currencies=usd`,
+        )
+        const priceJson = await priceRes.json()
+        tokenPrice = priceJson[coingeckoId]?.usd || 0
+      }
+      const amountUsd = merchantAmount || 0
+      const tokenEquivalent = tokenPrice ? amountUsd / tokenPrice : 0
+
+      const network = selectedToken.chain || 'unknown'
+
+      console.log('Payment details:', {
+        merchantId,
+        merchantAmount: amountUsd,
+        token: selectedToken.symbol,
+        network,
+        tokenEquivalent,
+      })
+    } catch (e) {
+      console.error('Price fetch failed', e)
+    }
+
+    toast.success('Payment logged in console!', {
+      duration: 3000,
+      position: 'top-center',
+    })
   }
 
   const getFeeReduction = () => {
@@ -110,7 +141,6 @@ const Shopper = () => {
     isLoading: balancesLoading,
     error: balancesError,
   } = useTokenBalances(userEvmAccount.address, {
-    chain: 'eth',
     enabled: Boolean(userEvmAccount.address),
   })
 
@@ -126,6 +156,22 @@ const Shopper = () => {
     setShowTokenModal(false)
   }
 
+  // wrapper to satisfy Tab type
+  const setActiveTab = (val: Tab) => setActiveTabState(val)
+
+  if (activeTabState === 'SET_MERCHANT') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#FFD28F]/20 via-[#F1A5FB]/10 to-[#0B263F]/5">
+        <Navbar />
+        <div className="container max-w-lg px-4 py-12 mx-auto">
+          <Card className="relative p-6 overflow-hidden border-0 shadow-2xl bg-white/95 backdrop-blur-sm rounded-3xl">
+            <SetMerchant setActiveTab={setActiveTab} />
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#FFD28F]/20 via-[#F1A5FB]/10 to-[#0B263F]/5">
       <Navbar />
@@ -134,9 +180,18 @@ const Shopper = () => {
         <div className="max-w-lg mx-auto">
           <Card className="relative overflow-hidden border-0 shadow-2xl bg-white/95 backdrop-blur-sm rounded-3xl">
             <CardContent className="p-8">
-              <h1 className="text-2xl font-bold text-[#0B263F]">
-                Checkout with Hati
-              </h1>
+              <div className="flex items-center justify-between">
+                <h1 className="text-2xl font-bold text-[#0B263F]">
+                  Checkout with Hati
+                </h1>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setActiveTab('SET_MERCHANT')}
+                >
+                  Set Merchant
+                </Button>
+              </div>
 
               {/* Payment Details Section */}
               <div className="mb-8">
@@ -151,13 +206,13 @@ const Shopper = () => {
                           {merchantName}
                         </p>
                         <p className="font-mono text-xs text-gray-500">
-                          {merchantAddress}
+                          {merchantId}
                         </p>
                       </div>
                     </div>
                     <div className="flex-1">
                       <p className="text-4xl font-bold text-[#0B263F]">
-                        ${amount}
+                        ${merchantAmount}
                       </p>
                     </div>
                   </CardContent>

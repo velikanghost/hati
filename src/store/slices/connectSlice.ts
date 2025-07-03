@@ -46,7 +46,7 @@ interface ConnectState {
   selectedToken: Token
   selectedChain: ChainType
   merchantAmount: number
-  merchantAddress: string
+  merchantId: string
   transferAmount: string
   availableSourceTokens: Token[]
   userTokensInWallet: Token[]
@@ -83,7 +83,7 @@ const initialState: ConnectState = {
     icon: '',
   },
   merchantAmount: 5,
-  merchantAddress: '0x0cf76957AF81329917E7c29f8cbf9b8FAd7842ce',
+  merchantId: 'HT-001',
   transferAmount: '',
   availableSourceTokens: [],
   userTokensInWallet: [],
@@ -134,8 +134,8 @@ const connectSlice = createSlice({
     setMerchantAmount: (state, action: PayloadAction<number>) => {
       state.merchantAmount = action.payload
     },
-    setMerchantAddress: (state, action: PayloadAction<string>) => {
-      state.merchantAddress = action.payload
+    setMerchantId: (state, action: PayloadAction<string>) => {
+      state.merchantId = action.payload
     },
     setEthPrice: (state, action: PayloadAction<number>) => {
       state.ethPrice = action.payload
@@ -174,7 +174,7 @@ export const {
   setSelectedToken,
   setSelectedChain,
   setMerchantAmount,
-  setMerchantAddress,
+  setMerchantId,
   setEthPrice,
   setDefaultMerchantToken,
   setDefaultMerchantPrice,

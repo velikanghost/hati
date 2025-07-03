@@ -7,6 +7,9 @@ export interface TokenBalance {
   decimals: number
   amount: string // raw balance in smallest units
   thumbnail?: string
+  chain: string
+  usd_value: string
+  amount_formatted: string
 }
 
 interface UseTokenBalancesOptions {
@@ -16,7 +19,7 @@ interface UseTokenBalancesOptions {
 
 export const useTokenBalances = (
   address?: string,
-  { chain = 'eth', enabled = true }: UseTokenBalancesOptions = {},
+  { chain = '', enabled = true }: UseTokenBalancesOptions = {},
 ) => {
   const [balances, setBalances] = useState<TokenBalance[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -41,19 +44,21 @@ export const useTokenBalances = (
         const json = await res.json()
         if (json.success) {
           let rawList: any[] = []
-          if (Array.isArray(json.data)) {
-            rawList = json.data
-          } else if (Array.isArray(json.data?.result)) {
-            rawList = json.data.result
-          }
+
+          const dataArray: any[] = Array.isArray(json.data) ? json.data : []
+
+          rawList = dataArray // already flattened
 
           const mapped: TokenBalance[] = rawList.map((item) => ({
             token_address: item.token_address,
             symbol: item.symbol,
             name: item.name,
             decimals: Number(item.decimals ?? 18),
-            amount: item.balance ?? item.amount ?? '0',
+            amount: item.amount,
             thumbnail: item.thumbnail,
+            chain: item.chain,
+            usd_value: item.usd_value,
+            amount_formatted: item.amount_formatted,
           }))
 
           setBalances(mapped)
