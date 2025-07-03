@@ -4,11 +4,13 @@ import { AppShell, Avatar, Burger } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { useState, useEffect } from 'react'
 import { Button } from '../ui/button'
 import HatiLogo from '../../../public/images/hati_logo.png'
 import Image from 'next/image'
 import { blo } from 'blo'
 import { merchantStorage } from '@/lib/merchantStorage'
+import { useMetaMask } from '@/hooks/useMetaMask'
 
 import './dashboard.scss'
 import {
@@ -55,6 +57,14 @@ const navLinks = [
 
 type CardTier = 'Basic' | 'Premium' | 'Elite'
 
+interface MerchantData {
+  walletAddress: string
+  hatiWalletAddress?: string
+  hatiWalletId?: string
+  cardTier: CardTier
+  isNewUser: boolean
+}
+
 export default function MerchantDashboardLayout({
   children,
 }: {
@@ -63,12 +73,42 @@ export default function MerchantDashboardLayout({
   const [opened, { toggle }] = useDisclosure()
   const pathname = usePathname()
   const router = useRouter()
+  const { account, cardTier: metaMaskCardTier } = useMetaMask()
 
-  // TODO: Get from Redux store or context
-  const merchantWallet = '0x1234...5678' // Mock wallet address
-  const cardTier: CardTier = 'Elite' // Mock card tier (Basic/Premium/Elite)
+  const [merchantData, setMerchantData] = useState<MerchantData | null>(null)
 
-  const shouldShowYield = ['Premium', 'Elite'].includes(cardTier)
+  // Load merchant data on component mount
+  useEffect(() => {
+    const loadMerchantData = () => {
+      const cachedData = merchantStorage.load()
+      if (cachedData) {
+        setMerchantData(cachedData)
+      } else if (account?.address) {
+        // If no cached data but we have a connected account, use fallback
+        setMerchantData({
+          walletAddress: account.address,
+          cardTier:
+            metaMaskCardTier?.tier === 'basic'
+              ? 'Basic'
+              : metaMaskCardTier?.tier === 'premium'
+              ? 'Premium'
+              : metaMaskCardTier?.tier === 'elite'
+              ? 'Elite'
+              : 'Basic',
+          isNewUser: true,
+        })
+      }
+    }
+
+    loadMerchantData()
+  }, [account, metaMaskCardTier])
+
+  // Get values from merchant data or fallback to connected account
+  const merchantWallet =
+    merchantData?.walletAddress || account?.address || '0x...'
+  const cardTier = merchantData?.cardTier || 'Basic'
+
+  const shouldShowYield = ['Basic', 'Premium', 'Elite'].includes(cardTier)
 
   const getCardTierColor = (tier: CardTier) => {
     switch (tier) {
@@ -79,6 +119,11 @@ export default function MerchantDashboardLayout({
       default:
         return 'text-gray-600 bg-gray-50 border-gray-200'
     }
+  }
+
+  const formatWalletAddress = (address: string) => {
+    if (address.length <= 10) return address
+    return `${address.slice(0, 6)}...${address.slice(-4)}`
   }
 
   const handleSignOut = () => {
@@ -115,11 +160,11 @@ export default function MerchantDashboardLayout({
               className="ring-2 ring-gray-100"
               radius="xl"
               size="lg"
-              src={blo(merchantWallet)}
+              src={blo(merchantWallet as `0x${string}`)}
             />
             <div className="flex flex-col">
               <div className="text-lg font-semibold text-gray-900">
-                {merchantWallet}
+                {formatWalletAddress(merchantWallet)}
               </div>
               <div
                 className={`text-sm font-medium px-2 py-1 rounded-full border ${getCardTierColor(
