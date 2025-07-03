@@ -16,16 +16,14 @@ interface Props {
 
 const UserLayer = ({ network, token, amount, setActiveTab, price }: Props) => {
   const dispatch = useAppDispatch()
-  const { bridgeComplete, selectedToken } = useAppSelector(
-    (state) => state.connect,
-  )
+  const { bridgeComplete } = useAppSelector((state) => state.bridge)
 
   useEffect(() => {
     const fetch = async () => {
       dispatch(fetchTokenPrice(token.symbol.toLowerCase()))
     }
     fetch()
-  }, [selectedToken.symbol, dispatch, token.symbol])
+  }, [token.symbol, dispatch]) // Remove selectedToken.symbol to prevent unnecessary re-fetches
 
   const getConversion = (
     amountInUsd: number,

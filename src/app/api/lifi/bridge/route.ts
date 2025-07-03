@@ -7,20 +7,35 @@ import {
   type Route as LiFiRoute,
 } from '@lifi/sdk'
 
-interface BridgeRequest {
+interface HatiBridgeRequest {
+  action: 'getRoutes' | 'executePayment' | 'getStatus'
   fromChain: number
-  toChain: number
+  toChain?: number // Always Linea for Hati
   fromToken: string
-  toToken?: string
   fromAmount: string
   fromAddress: string
-  toAddress: string
+  toAddress: string // Merchant's Hati wallet address
   slippage?: number
+  route?: LiFiRoute // For execution
+  txHash?: string // For status checking
 }
 
-class LiFiBridgeAPI {
+interface PaymentResult {
+  success: boolean
+  txHash?: string
+  route: LiFiRoute
+  estimatedTime: number
+  actualTime?: number
+  status: 'pending' | 'success' | 'failed'
+  error?: string
+}
+
+class HatiLiFiBridgeAPI {
   private initialized = false
   private readonly integrator = 'hati-metamask-hackathon'
+  private readonly LINEA_CHAIN_ID = ChainId.LNA // Linea mainnet
+  private readonly LINEA_USDC_ADDRESS =
+    '0x176211869cA2b568f2A7D4EE941E073a821EE1ff' // Linea USDC
 
   constructor() {
     this.initializeSDK()
@@ -30,18 +45,23 @@ class LiFiBridgeAPI {
     if (this.initialized) return
 
     try {
+      // ✅ Fixed: Use server-side only environment variables
+      const infuraApiKey = process.env.INFURA_API_KEY
+      if (!infuraApiKey) {
+        throw new Error('INFURA_API_KEY not configured')
+      }
+
       createConfig({
         integrator: this.integrator,
         rpcUrls: {
-          [ChainId.LNA]: [
-            `https://linea-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`,
-          ],
+          [ChainId.LNA]: [`https://linea-mainnet.infura.io/v3/${infuraApiKey}`],
           [ChainId.ARB]: [
-            `https://arb-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`,
+            `https://arbitrum-mainnet.infura.io/v3/${infuraApiKey}`,
           ],
           [ChainId.OPT]: [
-            `https://opt-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`,
+            `https://optimism-mainnet.infura.io/v3/${infuraApiKey}`,
           ],
+          [ChainId.BAS]: [`https://base-mainnet.infura.io/v3/${infuraApiKey}`],
         },
         routeOptions: {
           maxPriceImpact: 0.4,
@@ -50,73 +70,152 @@ class LiFiBridgeAPI {
       })
 
       this.initialized = true
-      console.log('LiFi SDK initialized successfully')
+      console.log('✅ Hati LiFi SDK initialized successfully')
     } catch (error) {
-      console.error('Failed to initialize LiFi SDK:', error)
+      console.error('❌ Failed to initialize LiFi SDK:', error)
       throw error
     }
   }
 
-  async getOptimalRoutes(request: BridgeRequest): Promise<LiFiRoute[]> {
+  async getOptimalHatiRoutes(request: HatiBridgeRequest): Promise<{
+    routes: LiFiRoute[]
+    bestRoute: LiFiRoute
+    estimatedTime: number
+  }> {
     try {
       this.initializeSDK()
 
+      // 🎯 Always convert to USDC on Linea for Hati merchants
       const routeRequest: RoutesRequest = {
         fromChainId: request.fromChain,
-        toChainId: request.toChain,
+        toChainId: this.LINEA_CHAIN_ID, // Always Linea
         fromTokenAddress: request.fromToken,
-        toTokenAddress:
-          request.toToken || '0xA0b86a33E6441bF99CF45c5c0Ad7b6D7e00E7D8D', // Default USDC
+        toTokenAddress: this.LINEA_USDC_ADDRESS, // Always USDC
         fromAmount: request.fromAmount,
         fromAddress: request.fromAddress,
-        toAddress: request.toAddress,
+        toAddress: request.toAddress, // Merchant's Hati wallet
         options: {
           slippage: request.slippage || 0.03,
           integrator: this.integrator,
           bridges: {
-            allow: ['cctp', 'across', 'stargate', 'hop'],
-            prefer: ['cctp'], // Prefer CCTP for USDC
+            allow: ['cctp', 'across', 'stargate', 'hop', 'multichain'],
+            prefer: ['cctp'], // Prioritize CCTP for fast USDC settlement
           },
           exchanges: {
-            allow: ['1inch', 'paraswap', 'uniswap', '0x'],
+            allow: ['1inch', 'paraswap', 'uniswap', '0x', 'dodo'],
           },
-          order: 'FASTEST',
+          order: 'FASTEST', // Prioritize speed for user experience
         },
       }
+
+      console.log(
+        `🔄 Getting routes from Chain ${request.fromChain} to Linea (USDC)`,
+      )
 
       const result = await getRoutes(routeRequest)
 
       if (!result.routes || result.routes.length === 0) {
-        throw new Error('No routes found for the given parameters')
+        throw new Error(
+          `No routes found from chain ${request.fromChain} to Linea. Please try a different token or amount.`,
+        )
       }
 
-      // Sort routes to prioritize CCTP
-      return this.sortRoutesByPreference(result.routes)
+      // Sort routes by preference (CCTP first, then by speed)
+      const sortedRoutes = this.sortRoutesByHatiPreference(result.routes)
+      const bestRoute = sortedRoutes[0]
+      const estimatedTime = this.getEstimatedSettlementTime(bestRoute)
+
+      console.log(
+        `✅ Found ${sortedRoutes.length} routes, best: ${
+          this.routeUsesCCTP(bestRoute) ? 'CCTP' : 'Other'
+        } (${estimatedTime}s)`,
+      )
+
+      return {
+        routes: sortedRoutes,
+        bestRoute,
+        estimatedTime,
+      }
     } catch (error) {
-      console.error('Error getting routes:', error)
+      console.error('❌ Error getting Hati routes:', error)
       throw error
     }
   }
 
-  private sortRoutesByPreference(routes: LiFiRoute[]): LiFiRoute[] {
+  async executePayment(route: LiFiRoute): Promise<PaymentResult> {
+    try {
+      console.log(
+        `🚀 Executing payment via ${
+          this.routeUsesCCTP(route) ? 'CCTP' : 'Bridge'
+        }`,
+      )
+
+      const startTime = Date.now()
+      const estimatedTime = this.getEstimatedSettlementTime(route)
+
+      // For demo purposes, simulate successful execution
+      // In production, this would integrate with the actual LiFi execution
+      const mockTxHash = `0x${Math.random().toString(16).substr(2, 64)}`
+
+      // Simulate processing time
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+
+      const actualTime = Math.round((Date.now() - startTime) / 1000)
+
+      const result: PaymentResult = {
+        success: true,
+        txHash: mockTxHash,
+        route,
+        estimatedTime,
+        actualTime,
+        status: 'success',
+      }
+
+      console.log(
+        `✅ Payment completed in ${actualTime}s (estimated: ${estimatedTime}s)`,
+      )
+
+      return result
+    } catch (error: any) {
+      console.error('❌ Payment execution failed:', error)
+      return {
+        success: false,
+        route,
+        estimatedTime: this.getEstimatedSettlementTime(route),
+        status: 'failed',
+        error: error.message || 'Payment execution failed',
+      }
+    }
+  }
+
+  private sortRoutesByHatiPreference(routes: LiFiRoute[]): LiFiRoute[] {
     return routes.sort((a, b) => {
+      // 1. Prioritize CCTP routes for USDC
       const aUsesCCTP = this.routeUsesCCTP(a)
       const bUsesCCTP = this.routeUsesCCTP(b)
 
       if (aUsesCCTP && !bUsesCCTP) return -1
       if (!aUsesCCTP && bUsesCCTP) return 1
 
-      // Sort by estimated time
-      const aTime = a.steps.reduce(
-        (total, step) => total + (step.estimate.executionDuration || 0),
+      // 2. Sort by estimated time
+      const aTime = this.getEstimatedSettlementTime(a)
+      const bTime = this.getEstimatedSettlementTime(b)
+
+      if (aTime !== bTime) return aTime - bTime
+
+      // 3. Sort by gas cost
+      const aGasCost = a.steps.reduce(
+        (total, step) =>
+          total + Number(step.estimate.gasCosts?.[0]?.amount || 0),
         0,
       )
-      const bTime = b.steps.reduce(
-        (total, step) => total + (step.estimate.executionDuration || 0),
+      const bGasCost = b.steps.reduce(
+        (total, step) =>
+          total + Number(step.estimate.gasCosts?.[0]?.amount || 0),
         0,
       )
 
-      return aTime - bTime
+      return aGasCost - bGasCost
     })
   }
 
@@ -124,7 +223,8 @@ class LiFiBridgeAPI {
     return route.steps.some(
       (step) =>
         step.toolDetails.name.toLowerCase().includes('cctp') ||
-        step.toolDetails.name.toLowerCase().includes('circle'),
+        step.toolDetails.name.toLowerCase().includes('circle') ||
+        step.toolDetails.name.toLowerCase().includes('native-circle'),
     )
   }
 
@@ -133,29 +233,112 @@ class LiFiBridgeAPI {
       return 15 // 8-20 seconds for CCTP
     }
 
+    // Calculate total time for non-CCTP routes
     return route.steps.reduce(
       (total, step) => total + (step.estimate.executionDuration || 30),
       0,
     )
   }
+
+  async checkTransactionStatus(txHash: string): Promise<{
+    status: 'pending' | 'success' | 'failed'
+    message: string
+  }> {
+    try {
+      // In a real implementation, you'd check the transaction status
+      // For now, return a mock status
+      return {
+        status: 'success',
+        message: 'Transaction confirmed',
+      }
+    } catch (error) {
+      return {
+        status: 'failed',
+        message: 'Failed to check transaction status',
+      }
+    }
+  }
 }
 
-const lifiAPI = new LiFiBridgeAPI()
+const hatiLiFiAPI = new HatiLiFiBridgeAPI()
 
 export async function POST(request: NextRequest) {
   try {
-    const { action, ...params } = await request.json()
+    const requestBody = await request.json()
+    const { action, ...params } = requestBody
+
+    if (!action) {
+      return NextResponse.json(
+        { success: false, error: 'Action is required' },
+        { status: 400 },
+      )
+    }
+
+    const fullRequest = { action, ...params } as HatiBridgeRequest
 
     switch (action) {
       case 'getRoutes':
-        const routes = await lifiAPI.getOptimalRoutes(params as BridgeRequest)
+        if (
+          !fullRequest.fromChain ||
+          !fullRequest.fromToken ||
+          !fullRequest.fromAmount ||
+          !fullRequest.fromAddress ||
+          !fullRequest.toAddress
+        ) {
+          return NextResponse.json(
+            { success: false, error: 'Missing required parameters' },
+            { status: 400 },
+          )
+        }
+
+        const routeResult = await hatiLiFiAPI.getOptimalHatiRoutes(fullRequest)
+
         return NextResponse.json({
           success: true,
           data: {
-            routes,
-            bestRoute: routes[0],
-            estimatedTime: lifiAPI.getEstimatedSettlementTime(routes[0]),
+            ...routeResult,
+            destinationChain: 'Linea',
+            destinationToken: 'USDC',
+            message: `Converting to USDC on Linea via ${
+              hatiLiFiAPI['routeUsesCCTP'](routeResult.bestRoute)
+                ? 'CCTP'
+                : 'Bridge'
+            }`,
           },
+        })
+
+      case 'executePayment':
+        if (!fullRequest.route) {
+          return NextResponse.json(
+            { success: false, error: 'Route required for execution' },
+            { status: 400 },
+          )
+        }
+
+        const paymentResult = await hatiLiFiAPI.executePayment(
+          fullRequest.route,
+        )
+
+        return NextResponse.json({
+          success: paymentResult.success,
+          data: paymentResult,
+        })
+
+      case 'getStatus':
+        if (!fullRequest.txHash) {
+          return NextResponse.json(
+            { success: false, error: 'Transaction hash required' },
+            { status: 400 },
+          )
+        }
+
+        const status = await hatiLiFiAPI.checkTransactionStatus(
+          fullRequest.txHash,
+        )
+
+        return NextResponse.json({
+          success: true,
+          data: status,
         })
 
       default:
@@ -165,8 +348,13 @@ export async function POST(request: NextRequest) {
         )
     }
   } catch (error: any) {
+    console.error('🔥 Hati Bridge API Error:', error)
     return NextResponse.json(
-      { success: false, error: error.message || 'Internal server error' },
+      {
+        success: false,
+        error: error.message || 'Payment processing failed',
+        details: 'Please try again or contact support if the issue persists',
+      },
       { status: 500 },
     )
   }

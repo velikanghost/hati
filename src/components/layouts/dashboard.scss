@@ -1,0 +1,124 @@
+/* Modern Dashboard Layout with Tailwind CSS */
+
+/* Base AppShell styling for unscrollable layout */
+.mantine-AppShell-root {
+  @apply h-screen overflow-hidden;
+}
+
+.mantine-AppShell-main {
+  @apply bg-slate-50 overflow-hidden;
+  height: calc(100vh - 90px) !important; /* Account for header height */
+}
+
+.mantine-AppShell-navbar {
+  @apply bg-white border-r border-gray-100 overflow-hidden;
+  padding: 2rem 1.5rem;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+}
+
+.mantine-AppShell-header {
+  @apply bg-white border-b border-gray-100;
+  padding: 1rem 2rem;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+/* Navigation styling */
+.sidenav_wrapper {
+  @apply flex flex-col h-full;
+
+  .navlinks {
+    @apply flex items-center gap-3 text-gray-600 px-4 py-3 rounded-xl transition-all duration-200;
+
+    &:hover {
+      @apply bg-gray-50 text-gray-800;
+    }
+  }
+
+  .navlinks_active {
+    @apply text-white bg-orange-500 px-4 py-3 rounded-xl font-semibold shadow-sm;
+  }
+
+  .logo-container {
+    @apply mb-8 flex items-center gap-4;
+
+    h1 {
+      @apply text-gray-700 text-3xl font-medium;
+    }
+  }
+}
+
+/* Remove Mantine default styles and apply modern design */
+.mantine-NavLink-root {
+  @apply text-gray-600 rounded-xl transition-all duration-200 p-4 gap-4 hover:bg-gray-50 hover:text-gray-800;
+  border: none !important;
+
+  .mantine-NavLink-section {
+    margin-right: 0 !important;
+  }
+
+  &[data-active='true'] {
+    @apply bg-orange-500 text-white shadow-sm;
+
+    .mantine-NavLink-label {
+      @apply font-semibold text-white;
+    }
+
+    .mantine-NavLink-section {
+      @apply text-white;
+    }
+
+    .mantine-NavLink-section svg {
+      @apply text-white;
+    }
+  }
+
+  .mantine-NavLink-label {
+    @apply text-gray-600 text-lg font-medium;
+  }
+
+  .mantine-NavLink-section {
+    @apply text-gray-600;
+  }
+}
+
+.mantine-NavLink-section svg {
+  @apply w-6 h-6;
+}
+
+/* Scrollable content area for dashboard pages */
+.dashboard-content {
+  @apply h-full overflow-y-auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgb(203 213 225) transparent;
+}
+
+.dashboard-content::-webkit-scrollbar {
+  @apply w-1;
+}
+
+.dashboard-content::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+.dashboard-content::-webkit-scrollbar-thumb {
+  @apply bg-slate-300 rounded-full;
+}
+
+.dashboard-content::-webkit-scrollbar-thumb:hover {
+  @apply bg-slate-400;
+}
+
+/* Responsive design */
+@media screen and (max-width: 768px) {
+  .sidenav_img {
+    display: none;
+  }
+
+  .mantine-AppShell-navbar {
+    padding: 1rem;
+  }
+
+  .mantine-AppShell-header {
+    padding: 1rem;
+  }
+}

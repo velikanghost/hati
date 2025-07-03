@@ -1,57 +1,30 @@
-//Testnet
 export const chains = [
   {
-    title: 'Sepolia',
-    explorer: 'https://sepolia.etherscan.io',
-    icon: 'eth.svg',
-  },
-  {
-    title: 'Base Sepolia',
-    explorer: 'https://base-sepolia.blockscout.com',
-    icon: 'base.svg',
-  },
-  {
-    title: 'Optimism Sepolia',
-    explorer: 'https://sepolia-optimism.etherscan.io',
-    icon: 'optimism.svg',
-  },
-  {
-    title: 'Avalanche',
-    explorer: 'https://sepolia-optimism.etherscan.io',
-    icon: 'avalanche.svg',
-  },
-  {
-    title: 'Celo',
-    explorer: 'https://explorer.mantle.xyz/',
-    icon: 'celo.svg',
+    title: 'Linea',
+    explorer: 'https://lineascan.build',
+    icon: 'linea.svg',
   },
 ]
 
-//Mainnet
-export const chainss = [
+export const bridgeSourceChains = [
   {
     title: 'Ethereum',
-    explorer: 'https://sepolia.etherscan.io',
+    explorer: 'https://etherscan.io',
     icon: 'eth.svg',
   },
   {
+    title: 'Arbitrum',
+    explorer: 'https://arbiscan.io',
+    icon: 'arbitrum.svg',
+  },
+  {
     title: 'Base',
-    explorer: 'https://base-sepolia.blockscout.com',
+    explorer: 'https://basescan.org',
     icon: 'base.svg',
   },
   {
     title: 'Optimism',
-    explorer: 'https://sepolia-optimism.etherscan.io',
+    explorer: 'https://optimistic.etherscan.io',
     icon: 'optimism.svg',
-  },
-  {
-    title: 'Avalanche',
-    explorer: 'https://sepolia-optimism.etherscan.io',
-    icon: 'avalanche.svg',
-  },
-  {
-    title: 'Mantle',
-    explorer: 'https://explorer.mantle.xyz/',
-    icon: 'mantle.svg',
   },
 ]

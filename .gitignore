@@ -30,9 +30,6 @@ yarn-error.log*
 # local env files
 .env*.local
 .env
-env
-.env
-env
 
 # vercel
 .vercel
@@ -75,3 +72,8 @@ promt.txt
 roadmap.txt
 .cursor
 .cursor/rules
+
+/generated/prisma
+hati-entity-recovery.dat
+recovery_file_1751453810052.dat
+DATABASE_SETUP.md

@@ -1,0 +1,93 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Merchant Profile - Core business information
+model MerchantProfile {
+  id                 String   @id @default(cuid())
+  metamaskAddress    String   @unique
+  hatiWalletId       String   @unique
+  hatiWalletAddress  String   @unique
+  businessName       String
+  businessType       String?
+  website            String?
+  preferredCurrency  String   @default("USDC")
+  riskTolerance      RiskTolerance @default(MODERATE)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relations
+  sessions           MerchantSession[]
+  transactions       MerchantTransaction[]
+
+  @@map("merchant_profiles")
+}
+
+// Merchant Session - Authentication and session management
+model MerchantSession {
+  id               String   @id @default(cuid())
+  address          String   // MetaMask address
+  sessionToken     String   @unique
+  expiresAt        DateTime
+  hatiWalletId     String?
+  hatiWalletAddress String?
+  profileComplete  Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  merchant         MerchantProfile? @relation(fields: [address], references: [metamaskAddress])
+
+  @@map("merchant_sessions")
+}
+
+// Transaction history for merchants
+model MerchantTransaction {
+  id                 String   @id @default(cuid())
+  merchantAddress    String
+  transactionHash    String   @unique
+  sourceChain        String
+  destinationChain   String
+  sourceToken        String
+  destinationToken   String
+  amount             String   // Store as string to preserve precision
+  usdValue           String?  // USD value at time of transaction
+  status             TransactionStatus
+  protocol           String?  // LiFi, CCTP, etc.
+  bridgeTime         Int?     // Time taken in seconds
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relations
+  merchant           MerchantProfile @relation(fields: [merchantAddress], references: [metamaskAddress])
+
+  @@map("merchant_transactions")
+}
+
+// Enums
+enum RiskTolerance {
+  CONSERVATIVE
+  MODERATE  
+  AGGRESSIVE
+}
+
+enum TransactionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}

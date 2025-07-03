@@ -5,12 +5,18 @@ import { MerchantTransactions } from '@/lib/types/all'
 const transformOperations = (operations: any[]): MerchantTransactions[] => {
   const getChainNameById = (chainId: string): string | undefined => {
     const networkChainNames: { [key: string]: any } = {
+      // Hati Primary Chain (Merchant destination)
+      59144: 'Linea', // 0xe708 - Primary network for Hati merchants
+      // Bridge Source Chains (User payment origins)
+      1: 'Ethereum',
+      42161: 'Arbitrum', // 0xa4b1
+      8453: 'Base', // 0x2105
+      10: 'Optimism', // 0xa
+      // Legacy testnet mappings (deprecated)
       10002: 'Sepolia',
       10004: 'BaseSepolia',
       10005: 'OptimismSepolia',
       10003: 'ArbitrumSepolia',
-      6: 'Avalanche',
-      14: 'Celo',
     }
     return networkChainNames[chainId] || undefined
   }
@@ -33,7 +39,7 @@ const transformOperations = (operations: any[]): MerchantTransactions[] => {
 export const merchantApi = createApi({
   reducerPath: 'merchantApi',
   baseQuery: fetchBaseQuery({
-    baseUrl: 'https://api.testnet.wormholescan.io/api/v1/',
+    baseUrl: 'https://api.wormholescan.io/api/v1/',
   }),
   tagTypes: ['Operations'],
   endpoints: (builder) => ({

@@ -6,72 +6,85 @@ interface HatiWallet {
   id: string
   address: string
   blockchain: string
-  state: 'LIVE' | 'FROZEN'
-  walletSetId: string
-  createDate: string
-  updateDate: string
+  walletType: 'merchant' | 'user'
+  userId: string
+  network: string
+  createdAt: string
 }
 
-interface WalletBalance {
-  token: {
-    symbol: string
-    address: string
-  }
-  amount: string
+interface CircleWalletState {
+  wallet: HatiWallet | null
+  isLoading: boolean
+  error: string | null
 }
 
 export const useCircleWallet = () => {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [wallet, setWallet] = useState<HatiWallet | null>(null)
-  const [balance, setBalance] = useState<WalletBalance[]>([])
+  const [state, setState] = useState<CircleWalletState>({
+    wallet: null,
+    isLoading: false,
+    error: null,
+  })
 
+  // Create single Hati wallet on Linea
   const createWallet = useCallback(
-    async (userId: string, blockchain: 'ETH' | 'MATIC' | 'AVAX' = 'ETH') => {
-      setLoading(true)
-      setError(null)
+    async (
+      userId: string,
+      walletType: 'merchant' | 'user',
+      merchantAddress?: string,
+    ): Promise<HatiWallet | null> => {
+      setState((prev) => ({ ...prev, isLoading: true, error: null }))
 
       try {
         const response = await fetch('/api/circle/wallet', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'createWallet',
             userId,
-            blockchain,
+            walletType,
+            merchantAddress,
           }),
         })
 
         const result = await response.json()
 
         if (!result.success) {
-          throw new Error(result.error || 'Failed to create wallet')
+          throw new Error(result.error)
         }
 
-        setWallet(result.data)
-        return result.data
-      } catch (err: any) {
-        setError(err.message)
-        throw err
-      } finally {
-        setLoading(false)
+        const wallet = result.data as HatiWallet
+
+        setState((prev) => ({
+          ...prev,
+          wallet,
+          isLoading: false,
+        }))
+
+        console.log(
+          `✅ Created ${walletType} Hati wallet for ${userId}:`,
+          wallet.address,
+        )
+
+        return wallet
+      } catch (error: any) {
+        console.error('Failed to create Hati wallet:', error)
+        setState((prev) => ({
+          ...prev,
+          error: error.message,
+          isLoading: false,
+        }))
+        return null
       }
     },
     [],
   )
 
+  // Get wallet balance
   const getWalletBalance = useCallback(async (walletId: string) => {
-    setLoading(true)
-    setError(null)
-
     try {
       const response = await fetch('/api/circle/wallet', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'getBalance',
           walletId,
@@ -81,49 +94,103 @@ export const useCircleWallet = () => {
       const result = await response.json()
 
       if (!result.success) {
-        throw new Error(result.error || 'Failed to get balance')
+        throw new Error(result.error)
       }
 
-      setBalance(result.data)
       return result.data
-    } catch (err: any) {
-      setError(err.message)
-      throw err
-    } finally {
-      setLoading(false)
+    } catch (error: any) {
+      console.error('Failed to get wallet balance:', error)
+      setState((prev) => ({ ...prev, error: error.message }))
+      return null
     }
   }, [])
 
-  const getUSDCBalance = useCallback(
-    (balances: WalletBalance[] = balance) => {
-      const usdcBalance = balances.find(
-        (b) =>
-          b.token.symbol.toUpperCase() === 'USDC' ||
-          b.token.symbol.toUpperCase() === 'USDC.E',
-      )
-      return usdcBalance ? parseFloat(usdcBalance.amount) : 0
+  // Sign transaction
+  const signTransaction = useCallback(
+    async (walletId: string, transaction: any) => {
+      setState((prev) => ({ ...prev, isLoading: true, error: null }))
+
+      try {
+        const response = await fetch('/api/circle/wallet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'signTransaction',
+            walletId,
+            transaction,
+          }),
+        })
+
+        const result = await response.json()
+
+        if (!result.success) {
+          throw new Error(result.error)
+        }
+
+        setState((prev) => ({ ...prev, isLoading: false }))
+        return result.data
+      } catch (error: any) {
+        console.error('Failed to sign transaction:', error)
+        setState((prev) => ({
+          ...prev,
+          error: error.message,
+          isLoading: false,
+        }))
+        return null
+      }
     },
-    [balance],
+    [],
   )
 
-  const resetState = useCallback(() => {
-    setWallet(null)
-    setBalance([])
-    setError(null)
-    setLoading(false)
+  // Get wallet info
+  const getWalletInfo = useCallback(async () => {
+    try {
+      const response = await fetch('/api/circle/wallet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'getWalletInfo',
+        }),
+      })
+
+      const result = await response.json()
+
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+
+      return result.data
+    } catch (error: any) {
+      console.error('Failed to get wallet info:', error)
+      return null
+    }
+  }, [])
+
+  // Clear wallet state
+  const clearWallet = useCallback(() => {
+    setState({
+      wallet: null,
+      isLoading: false,
+      error: null,
+    })
   }, [])
 
   return {
     // State
-    loading,
-    error,
-    wallet,
-    balance,
+    wallet: state.wallet,
+    isLoading: state.isLoading,
+    error: state.error,
 
     // Actions
     createWallet,
     getWalletBalance,
-    getUSDCBalance,
-    resetState,
+    signTransaction,
+    getWalletInfo,
+    clearWallet,
+
+    // Computed
+    hasWallet: !!state.wallet,
+    walletAddress: state.wallet?.address,
+    walletId: state.wallet?.id,
   }
 }

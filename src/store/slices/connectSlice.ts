@@ -12,27 +12,6 @@ export interface CardTier {
   delegationAmount?: string
 }
 
-// Simplified wallet connection - MetaMask connection is now handled by useMetaMask hook
-export const connectWallet = createAsyncThunk(
-  'connect/connectWallet',
-  async (_, { rejectWithValue }) => {
-    if (typeof window.ethereum !== 'undefined') {
-      try {
-        const accounts = await window.ethereum.request({
-          method: 'eth_requestAccounts',
-        })
-        return accounts[0]
-      } catch (error: any) {
-        return rejectWithValue(error.message)
-      }
-    } else {
-      return rejectWithValue('MetaMask is not installed')
-    }
-  },
-)
-
-// Bridge operations are now handled by bridgeSlice and useLiFiBridge hook
-
 export const fetchTokenPrice = createAsyncThunk(
   'connect/fetchTokenPrice',
   async (token: string, { rejectWithValue }) => {
@@ -177,11 +156,6 @@ const connectSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // Legacy wallet connection
-      .addCase(connectWallet.fulfilled, (state, action) => {
-        state.userEvmAddress = action.payload
-        state.userEvmAccount.address = action.payload
-      })
       // Token price fetching
       .addCase(fetchTokenPrice.fulfilled, (state, action) => {
         state.ethPrice = action.payload
