@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useAppDispatch, useAppSelector } from '@/store/hooks'
 import {
   useLazyGetRoutesQuery,
@@ -23,6 +23,18 @@ import {
   resetBridgeState,
   resetExecutionState,
 } from '@/store/slices/bridgeSlice'
+import {
+  createConfig,
+  EVM,
+  executeRoute,
+  type Route as LiFiRoute,
+  type RouteExtended,
+  getStepTransaction,
+  getStatus,
+} from '@lifi/sdk'
+import { createWalletClient, custom } from 'viem'
+import { useMetaMask } from './useMetaMask'
+import { initializeLiFiSDK } from '@/lib/lifi'
 
 interface BridgeRequest {
   fromChain: number
@@ -35,6 +47,19 @@ interface BridgeRequest {
   slippage?: number
 }
 
+interface LiFiExecutionResult {
+  success: boolean
+  txHash?: string
+  route?: LiFiRoute
+  error?: string
+}
+
+interface LiFiExecutionOptions {
+  onProgress?: (route: RouteExtended) => void
+  onSuccess?: (result: LiFiExecutionResult) => void
+  onError?: (error: string) => void
+}
+
 export const useLiFiBridge = () => {
   const dispatch = useAppDispatch()
   const bridgeState = useAppSelector((state) => state.bridge)
@@ -43,6 +68,51 @@ export const useLiFiBridge = () => {
   const [getRoutesQuery] = useLazyGetRoutesQuery()
   const [executeBridgeMutation] = useExecuteBridgeMutation()
   const [getStatusQuery] = useLazyGetStatusQuery()
+
+  const [isExecuting, setIsExecuting] = useState(false)
+  const [executionResult, setExecutionResult] =
+    useState<LiFiExecutionResult | null>(null)
+  const [sdkConfigured, setSdkConfigured] = useState(false)
+
+  const { account, sdk } = useMetaMask()
+
+  // Initialize LiFi SDK with EVM provider
+  useEffect(() => {
+    console.log('🔍 LiFi SDK initialization check:', {
+      hasSdk: !!sdk,
+      hasAccount: !!account,
+      sdkConfigured,
+      accountAddress: account?.address,
+      provider: !!sdk?.getProvider(),
+    })
+
+    if (!sdk || !account || sdkConfigured) {
+      console.log('⏳ Waiting for dependencies...', {
+        missingSdk: !sdk,
+        missingAccount: !account,
+        alreadyConfigured: sdkConfigured,
+      })
+      return
+    }
+
+    try {
+      const provider = sdk.getProvider()
+      if (!provider) {
+        console.error('❌ No provider available from MetaMask SDK')
+        return
+      }
+
+      const success = initializeLiFiSDK(provider, account.address)
+      if (success) {
+        setSdkConfigured(true)
+        console.log('✅ LiFi SDK configured successfully')
+      } else {
+        console.error('❌ LiFi SDK configuration failed')
+      }
+    } catch (error) {
+      console.error('❌ Error during LiFi SDK initialization:', error)
+    }
+  }, [sdk, account, sdkConfigured])
 
   const getRoutes = useCallback(
     async (request: BridgeRequest) => {
@@ -175,6 +245,112 @@ export const useLiFiBridge = () => {
     dispatch(resetExecutionState())
   }, [dispatch])
 
+  const executePayment = useCallback(
+    async (
+      route: LiFiRoute,
+      options?: LiFiExecutionOptions,
+    ): Promise<LiFiExecutionResult> => {
+      if (!sdkConfigured) {
+        const error = 'LiFi SDK not configured'
+        options?.onError?.(error)
+        return { success: false, error }
+      }
+
+      if (!account) {
+        const error = 'Wallet not connected'
+        options?.onError?.(error)
+        return { success: false, error }
+      }
+
+      setIsExecuting(true)
+      setExecutionResult(null)
+
+      try {
+        console.log('🚀 Starting LiFi route execution...')
+
+        const executedRoute = await executeRoute(route, {
+          updateRouteHook: (updatedRoute) => {
+            console.log('📈 Route update:', {
+              status: updatedRoute.steps.map((step) => ({
+                status: step.execution?.status,
+                txHash: step.execution?.process?.find((p) => p.txHash)?.txHash,
+              })),
+            })
+
+            options?.onProgress?.(updatedRoute)
+          },
+
+          acceptExchangeRateUpdateHook: async (params: any) => {
+            console.log('💱 Exchange rate changed:', params)
+
+            // For now, auto-accept all changes
+            console.log('✅ Auto-accepting rate change')
+            return true
+          },
+        })
+
+        // Extract transaction hash from the executed route
+        const txHash = executedRoute.steps
+          .flatMap((step) => step.execution?.process || [])
+          .find((process) => process.txHash)?.txHash
+
+        const result: LiFiExecutionResult = {
+          success: true,
+          txHash,
+          route: executedRoute,
+        }
+
+        console.log('✅ LiFi execution completed successfully:', result)
+
+        setExecutionResult(result)
+        options?.onSuccess?.(result)
+
+        return result
+      } catch (error: any) {
+        console.error('❌ LiFi execution failed:', error)
+
+        const result: LiFiExecutionResult = {
+          success: false,
+          error: error.message || 'Payment execution failed',
+          route,
+        }
+
+        setExecutionResult(result)
+        options?.onError?.(result.error!)
+
+        return result
+      } finally {
+        setIsExecuting(false)
+      }
+    },
+    [sdkConfigured, account],
+  )
+
+  // Helper function to get transaction status
+  const getTransactionStatus = useCallback(
+    async (
+      txHash: string,
+      fromChainId: number,
+      toChainId: number,
+      bridgeTool: string,
+    ) => {
+      try {
+        const status = await getStatus({
+          txHash,
+          fromChain: fromChainId,
+          toChain: toChainId,
+          bridge: bridgeTool,
+        })
+
+        return status
+      } catch (error) {
+        console.error('Failed to get transaction status:', error)
+        throw error
+      }
+    },
+    [],
+  )
+
   return {
     // State from Redux
     ...bridgeState,
@@ -197,5 +373,20 @@ export const useLiFiBridge = () => {
     getEstimatedTime,
     resetState,
     resetExecutionOnly,
+
+    // New state
+    isExecuting,
+    executionResult,
+    sdkConfigured,
+
+    // New actions
+    executePayment,
+    getTransactionStatus,
+
+    // Reset function
+    reset: () => {
+      setExecutionResult(null)
+      setIsExecuting(false)
+    },
   }
 }

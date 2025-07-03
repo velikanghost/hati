@@ -20,6 +20,7 @@ interface AuthRequest {
 }
 
 interface MerchantProfile {
+  merchantId: string
   metamaskAddress: string
   hatiWalletId: string
   hatiWalletAddress: string
@@ -234,9 +235,27 @@ Sign this message to authenticate your merchant account.`
         (profileData.riskTolerance?.toUpperCase() as RiskTolerance) ||
         'MODERATE'
 
+      // Generate unique merchantId (HT-XXX)
+      const generateMerchantId = async (): Promise<string> => {
+        const maxAttempts = 5
+        for (let i = 0; i < maxAttempts; i++) {
+          const random = Math.floor(Math.random() * 1000)
+          const id = `HT-${random.toString().padStart(3, '0')}`
+          const existing = await (db.merchantProfile as any).findUnique({
+            where: { merchantId: id },
+            select: { merchantId: true },
+          })
+          if (!existing) return id
+        }
+        throw new Error('Unable to generate unique merchantId')
+      }
+
+      const newMerchantId = await generateMerchantId()
+
       // Create merchant profile in database
-      const profile = await db.merchantProfile.create({
+      const profile = await (db.merchantProfile as any).create({
         data: {
+          merchantId: newMerchantId,
           metamaskAddress: session.address,
           hatiWalletId: session.hatiWalletId,
           hatiWalletAddress: session.hatiWalletAddress,
@@ -246,7 +265,7 @@ Sign this message to authenticate your merchant account.`
           preferredCurrency: 'USDC',
           riskTolerance,
           isActive: true,
-        },
+        } as any,
       })
 
       // Update session to mark profile as complete
@@ -261,6 +280,8 @@ Sign this message to authenticate your merchant account.`
 
       // Convert back to interface format
       const profileResponse: MerchantProfile = {
+        // @ts-ignore
+        merchantId: (profile as any).merchantId,
         metamaskAddress: profile.metamaskAddress,
         hatiWalletId: profile.hatiWalletId,
         hatiWalletAddress: profile.hatiWalletAddress,
@@ -308,6 +329,8 @@ Sign this message to authenticate your merchant account.`
 
       // Convert to interface format
       const profileResponse: MerchantProfile = {
+        // @ts-ignore
+        merchantId: (profile as any).merchantId,
         metamaskAddress: profile.metamaskAddress,
         hatiWalletId: profile.hatiWalletId,
         hatiWalletAddress: profile.hatiWalletAddress,
@@ -361,6 +384,8 @@ Sign this message to authenticate your merchant account.`
 
       // Convert to interface format
       const profileResponse: MerchantProfile = {
+        // @ts-ignore
+        merchantId: (updatedProfile as any).merchantId,
         metamaskAddress: updatedProfile.metamaskAddress,
         hatiWalletId: updatedProfile.hatiWalletId,
         hatiWalletAddress: updatedProfile.hatiWalletAddress,
@@ -393,6 +418,8 @@ Sign this message to authenticate your merchant account.`
       })
 
       return profiles.map((profile) => ({
+        // @ts-ignore
+        merchantId: (profile as any).merchantId,
         metamaskAddress: profile.metamaskAddress,
         hatiWalletId: profile.hatiWalletId,
         hatiWalletAddress: profile.hatiWalletAddress,

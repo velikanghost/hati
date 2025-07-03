@@ -63,6 +63,7 @@ export const useMetaMask = () => {
   useEffect(() => {
     const initSDK = async () => {
       try {
+        console.log('🔄 Initializing MetaMask SDK...')
         const { default: MetaMaskSDK } = await import('@metamask/sdk')
         const metamaskSDK = new MetaMaskSDK({
           dappMetadata: {
@@ -73,15 +74,40 @@ export const useMetaMask = () => {
           preferDesktop: false,
           checkInstallationImmediately: false,
         })
+
+        // Wait for SDK to be ready
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+
+        console.log('✅ MetaMask SDK initialized:', {
+          hasSDK: !!metamaskSDK,
+          hasProvider: !!metamaskSDK?.getProvider(),
+        })
+
         setSdk(metamaskSDK)
+
+        // If we already have a connection, update the account
+        if (metamaskSDK.getProvider()?.selectedAddress) {
+          const provider = metamaskSDK.getProvider()
+          setAccount({
+            address: provider?.selectedAddress || '',
+            provider,
+          })
+          console.log(
+            '🔄 Restored existing connection:',
+            provider?.selectedAddress,
+          )
+        }
       } catch (error) {
-        console.error('Failed to load MetaMask SDK:', error)
+        console.error('❌ Failed to load MetaMask SDK:', error)
       }
     }
 
     // Only initialize on client side
     if (typeof window !== 'undefined') {
+      console.log('🌐 Running in browser, starting SDK init...')
       initSDK()
+    } else {
+      console.log('⚠️ Not in browser, skipping SDK init')
     }
   }, [])
 
@@ -90,12 +116,20 @@ export const useMetaMask = () => {
     setError(null)
 
     try {
+      console.log('🔄 Connecting wallet with SDK:', !!sdk)
       if (!sdk) {
         throw new Error('MetaMask SDK not initialized')
       }
 
-      const accounts = await sdk.connect()
       const provider = sdk.getProvider()
+      console.log('🔍 Provider check:', {
+        hasProvider: !!provider,
+        isConnected: !!provider?.isConnected?.(),
+        selectedAddress: provider?.selectedAddress,
+      })
+
+      const accounts = await sdk.connect()
+      console.log('✅ Got accounts:', accounts)
 
       if (!accounts || accounts.length === 0) {
         throw new Error('No accounts found')
@@ -106,9 +140,11 @@ export const useMetaMask = () => {
         provider,
       }
 
+      console.log('✅ Setting account:', accountData)
       setAccount(accountData as MetaMaskAccount)
       return accountData
     } catch (err: any) {
+      console.error('❌ Connect wallet error:', err)
       setError(err.message || 'Failed to connect wallet')
       throw err
     } finally {
@@ -414,6 +450,7 @@ export const useMetaMask = () => {
     isVerifyingCard,
     error,
     isConnected: !!account,
+    sdk,
 
     // Actions
     connectWallet,

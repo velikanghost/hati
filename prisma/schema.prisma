@@ -17,6 +17,7 @@ datasource db {
 // Merchant Profile - Core business information
 model MerchantProfile {
   id                 String   @id @default(cuid())
+  merchantId         String?   @unique
   metamaskAddress    String   @unique
   hatiWalletId       String   @unique
   hatiWalletAddress  String   @unique

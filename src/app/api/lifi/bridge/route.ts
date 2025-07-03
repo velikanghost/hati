@@ -9,15 +9,17 @@ import {
 
 interface HatiBridgeRequest {
   action: 'getRoutes' | 'executePayment' | 'getStatus'
-  fromChain: number
-  toChain?: number // Always Linea for Hati
-  fromToken: string
+  fromChainId: number
+  toChainId?: number // Always Linea for Hati
+  fromTokenAddress: string
+  toTokenAddress?: string // default Linea USDC
   fromAmount: string
   fromAddress: string
   toAddress: string // Merchant's Hati wallet address
   slippage?: number
   route?: LiFiRoute // For execution
   txHash?: string // For status checking
+  bridgeTool?: string // For status checking
 }
 
 interface PaymentResult {
@@ -87,36 +89,32 @@ class HatiLiFiBridgeAPI {
 
       // 🎯 Always convert to USDC on Linea for Hati merchants
       const routeRequest: RoutesRequest = {
-        fromChainId: request.fromChain,
-        toChainId: this.LINEA_CHAIN_ID, // Always Linea
-        fromTokenAddress: request.fromToken,
-        toTokenAddress: this.LINEA_USDC_ADDRESS, // Always USDC
+        fromChainId: request.fromChainId,
+        toChainId: this.LINEA_CHAIN_ID,
+        fromTokenAddress: request.fromTokenAddress,
+        toTokenAddress: this.LINEA_USDC_ADDRESS,
         fromAmount: request.fromAmount,
         fromAddress: request.fromAddress,
         toAddress: request.toAddress, // Merchant's Hati wallet
         options: {
           slippage: request.slippage || 0.03,
           integrator: this.integrator,
-          bridges: {
-            allow: ['cctp', 'across', 'stargate', 'hop', 'multichain'],
-            prefer: ['cctp'], // Prioritize CCTP for fast USDC settlement
-          },
           exchanges: {
             allow: ['1inch', 'paraswap', 'uniswap', '0x', 'dodo'],
           },
-          order: 'FASTEST', // Prioritize speed for user experience
+          order: 'FASTEST',
         },
       }
 
       console.log(
-        `🔄 Getting routes from Chain ${request.fromChain} to Linea (USDC)`,
+        `🔄 Getting routes from Chain ${request.fromChainId} to Linea (USDC)`,
       )
 
       const result = await getRoutes(routeRequest)
 
       if (!result.routes || result.routes.length === 0) {
         throw new Error(
-          `No routes found from chain ${request.fromChain} to Linea. Please try a different token or amount.`,
+          `No routes found from chain ${request.fromChainId} to Linea. Please try a different token or amount.`,
         )
       }
 
@@ -142,49 +140,20 @@ class HatiLiFiBridgeAPI {
     }
   }
 
+  // Payment execution is now handled client-side with the LiFi SDK
+  // This method is deprecated - use the useLiFiBridge hook instead
   async executePayment(route: LiFiRoute): Promise<PaymentResult> {
-    try {
-      console.log(
-        `🚀 Executing payment via ${
-          this.routeUsesCCTP(route) ? 'CCTP' : 'Bridge'
-        }`,
-      )
+    console.warn(
+      '⚠️ Server-side execution is deprecated. Use client-side execution instead.',
+    )
 
-      const startTime = Date.now()
-      const estimatedTime = this.getEstimatedSettlementTime(route)
-
-      // For demo purposes, simulate successful execution
-      // In production, this would integrate with the actual LiFi execution
-      const mockTxHash = `0x${Math.random().toString(16).substr(2, 64)}`
-
-      // Simulate processing time
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
-      const actualTime = Math.round((Date.now() - startTime) / 1000)
-
-      const result: PaymentResult = {
-        success: true,
-        txHash: mockTxHash,
-        route,
-        estimatedTime,
-        actualTime,
-        status: 'success',
-      }
-
-      console.log(
-        `✅ Payment completed in ${actualTime}s (estimated: ${estimatedTime}s)`,
-      )
-
-      return result
-    } catch (error: any) {
-      console.error('❌ Payment execution failed:', error)
-      return {
-        success: false,
-        route,
-        estimatedTime: this.getEstimatedSettlementTime(route),
-        status: 'failed',
-        error: error.message || 'Payment execution failed',
-      }
+    return {
+      success: false,
+      route,
+      estimatedTime: this.getEstimatedSettlementTime(route),
+      status: 'failed',
+      error:
+        'Payment execution must be done client-side with wallet interaction',
     }
   }
 
@@ -240,21 +209,58 @@ class HatiLiFiBridgeAPI {
     )
   }
 
-  async checkTransactionStatus(txHash: string): Promise<{
+  async checkTransactionStatus(
+    txHash: string,
+    fromChainId: number,
+    toChainId: number,
+    bridgeTool: string,
+  ): Promise<{
     status: 'pending' | 'success' | 'failed'
     message: string
+    details?: any
   }> {
     try {
-      // In a real implementation, you'd check the transaction status
-      // For now, return a mock status
-      return {
-        status: 'success',
-        message: 'Transaction confirmed',
+      // Use real LiFi SDK for status checking
+      const { getStatus } = await import('@lifi/sdk')
+
+      const result = await getStatus({
+        txHash,
+        fromChain: fromChainId,
+        toChain: toChainId,
+        bridge: bridgeTool,
+      })
+
+      // Map LiFi status to our expected format
+      let status: 'pending' | 'success' | 'failed'
+      let message: string
+
+      switch (result.status) {
+        case 'DONE':
+          status = 'success'
+          message = 'Transaction completed successfully'
+          break
+        case 'FAILED':
+          status = 'failed'
+          message = result.substatusMessage || 'Transaction failed'
+          break
+        case 'PENDING':
+        case 'NOT_FOUND':
+        default:
+          status = 'pending'
+          message = result.substatusMessage || 'Transaction pending'
+          break
       }
-    } catch (error) {
+
+      return {
+        status,
+        message,
+        details: result,
+      }
+    } catch (error: any) {
+      console.error('❌ Failed to check transaction status:', error)
       return {
         status: 'failed',
-        message: 'Failed to check transaction status',
+        message: error.message || 'Failed to check transaction status',
       }
     }
   }
@@ -279,8 +285,8 @@ export async function POST(request: NextRequest) {
     switch (action) {
       case 'getRoutes':
         if (
-          !fullRequest.fromChain ||
-          !fullRequest.fromToken ||
+          !fullRequest.fromChainId ||
+          !fullRequest.fromTokenAddress ||
           !fullRequest.fromAmount ||
           !fullRequest.fromAddress ||
           !fullRequest.toAddress
@@ -334,6 +340,9 @@ export async function POST(request: NextRequest) {
 
         const status = await hatiLiFiAPI.checkTransactionStatus(
           fullRequest.txHash,
+          fullRequest.fromChainId,
+          fullRequest.toChainId || hatiLiFiAPI['LINEA_CHAIN_ID'],
+          fullRequest.bridgeTool || 'unknown',
         )
 
         return NextResponse.json({
