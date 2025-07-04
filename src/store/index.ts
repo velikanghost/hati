@@ -3,7 +3,6 @@ import connectReducer from './slices/connectSlice'
 import merchantReducer from './slices/merchantSlice'
 import walletReducer from './slices/walletSlice'
 import bridgeReducer from './slices/bridgeSlice'
-import { merchantApi } from './api/merchantApi'
 import { bridgeApi } from './api/bridgeApi'
 
 export const store = configureStore({
@@ -12,7 +11,6 @@ export const store = configureStore({
     merchant: merchantReducer,
     wallet: walletReducer,
     bridge: bridgeReducer,
-    [merchantApi.reducerPath]: merchantApi.reducer,
     [bridgeApi.reducerPath]: bridgeApi.reducer,
   },
   middleware: (getDefaultMiddleware) =>
@@ -36,7 +34,7 @@ export const store = configureStore({
           'wallet.lastPaymentResult',
         ],
       },
-    }).concat(merchantApi.middleware, bridgeApi.middleware),
+    }).concat(bridgeApi.middleware),
 })
 
 export type RootState = ReturnType<typeof store.getState>

@@ -1,6 +1,5 @@
 import { createConfig, EVM } from '@lifi/sdk'
 import { createWalletClient, custom } from 'viem'
-import { mainnet } from 'viem/chains'
 
 export const initializeLiFiSDK = (provider: any, account: string) => {
   try {
