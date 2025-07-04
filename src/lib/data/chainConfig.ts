@@ -15,20 +15,20 @@ type Networks = {
 }
 
 export const networks: Networks = {
-  // Hati Primary Network - Linea (Merchant wallets)
-  '0xe708': {
-    chainId: '0xe708',
-    rpcUrls: ['https://rpc.linea.build'],
-    chainName: 'Linea',
+  // Hati Primary Network - Optimism (Merchant wallets)
+  '0xa': {
+    chainId: '0xa',
+    rpcUrls: ['https://mainnet.optimism.io'],
+    chainName: 'Optimism',
     nativeCurrency: {
       name: 'ETH',
       symbol: 'ETH',
       decimals: 18,
     },
-    blockExplorerUrls: ['https://lineascan.build'],
+    blockExplorerUrls: ['https://optimistic.etherscan.io'],
   },
 
-  // Bridge Source Networks (Users can pay from these chains, bridged to Linea)
+  // Bridge Source Networks (Users can pay from these chains, bridged to Optimism)
   '0xa4b1': {
     chainId: '0xa4b1',
     rpcUrls: ['https://arb1.arbitrum.io/rpc'],
@@ -51,16 +51,16 @@ export const networks: Networks = {
     },
     blockExplorerUrls: ['https://basescan.org'],
   },
-  '0xa': {
-    chainId: '0xa',
-    rpcUrls: ['https://mainnet.optimism.io'],
-    chainName: 'Optimism',
+  '0xe708': {
+    chainId: '0xe708',
+    rpcUrls: ['https://rpc.linea.build'],
+    chainName: 'Linea',
     nativeCurrency: {
       name: 'ETH',
       symbol: 'ETH',
       decimals: 18,
     },
-    blockExplorerUrls: ['https://optimistic.etherscan.io'],
+    blockExplorerUrls: ['https://lineascan.build'],
   },
   '0x1': {
     chainId: '0x1',

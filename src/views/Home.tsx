@@ -1,3 +1,5 @@
+'use client'
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -7,50 +9,73 @@ import {
 } from '@/components/ui/dropdown-menu'
 import Navbar from '@/components/layouts/navbar'
 import { useRouter } from 'next/navigation'
+import '@/app/globals.scss'
 
 const Home = () => {
   const router = useRouter()
   return (
     <>
-      <section className="relative h-[100dvh] bg-[#1F2026]">
-        <Navbar />
-        <div className="container absolute w-full mx-auto transform -translate-x-1/2 -translate-y-1/2 top-1/2 left-1/2">
-          <div className="flex flex-col items-center justify-between gap-20 lg:flex-row">
-            <div className="flex flex-col items-center justify-center flex-1 text-center">
-              <h1 className="text-secondary drop-shadow-sm text-[40px] md:text-[60px] lg:text-[65px] leading-[120%] font-headings font-bold mb-6">
-                Smart Payments <br /> MetaMask Card Powered.
+      <div className="relative w-full overflow-x-hidden font-[Space Grotesk]">
+        {/* Hero Gradient Background with Diagonal Cut */}
+        <div
+          className="absolute top-0 left-0 w-full h-[380px] md:h-[500px] bg-gradient-to-r from-[#FFD28F] to-[#F1A5FB] -z-10"
+          style={{ clipPath: 'polygon(0 0, 100% 0, 100% 45%, 0 70%)' }}
+        />
+        <section className="relative z-10 w-full min-h-[600px] flex flex-col overflow-x-hidden max-w-full font-[Space Grotesk]">
+          <Navbar />
+          <div className="flex items-center justify-between h-full gap-6 pt-16 mx-auto overflow-x-hidden max-w-max">
+            {/* Left Side */}
+            <div className="flex flex-col items-start justify-center flex-1 w-full max-w-xl px-4 mt-4 md:px-0 md:mt-16">
+              <h1 className="text-3xl xs:text-4xl sm:text-5xl md:text-6xl font-extrabold text-[#1a2530] mb-4 md:mb-6 leading-tight md:leading-tight">
+                Instant
+                <br />
+                Transactions
+                <br />
+                One Click,
+                <br />
+                Any Chain.
               </h1>
-              <p className="text-secondary drop-shadow-xl text-xl md:text-2xl mb-10 font-medium justify-center leading-[155%] max-w-[78%] text-center">
-                Experience Hati, A MetaMask Card-powered smart payment gateway
-                with lightning-fast USDC settlements and automated yield
-                optimization.
+              <p className="text-base sm:text-lg md:text-xl text-[#1a2530] mb-6 md:mb-8">
+                Experience Hati, a MetaMask Card-powered payment gateway that
+                enables instant cross-chain transactions with premium benefits
+                for card holders. Pay seamlessly across any chain with optimized
+                USDC settlements.
               </p>
-              <div className="flex items-center justify-center gap-4 md:gap-6">
+              <div className="flex flex-col w-full gap-3 mb-6 sm:flex-row md:gap-4">
                 <DropdownMenu>
-                  <DropdownMenuTrigger className="trydemo_btn bg-[#EBE8E2] text-secondary-foreground hover:bg-[#EBE8E2]/90">
-                    Try Demo
+                  <DropdownMenuTrigger className="bg-[#1a2530] text-white px-4 py-2 md:px-6 md:py-3 rounded-full font-semibold flex items-center gap-2 hover:bg-[#232f3e] transition w-full sm:w-auto text-base md:text-lg">
+                    Start with payments
+                    <span className="ml-2">&darr;</span>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent className="mt-1 bg-primary-foreground text-secondary-foreground w-[12.5rem] rounded text-base">
+                  <DropdownMenuContent className="mt-1 bg-white text-[#1a2530] w-[11rem] md:w-[12.5rem] rounded text-base shadow-lg">
                     <DropdownMenuItem
-                      className="cursor-pointer"
-                      onClick={() => router.push('/demo')}
+                      className="cursor-pointer px-4 py-2 hover:bg-[#F1A5FB]/20"
+                      onClick={() => router.push('/shoppers')}
                     >
-                      For Shoppers
+                      For shoppers
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
-                      className="cursor-pointer"
+                      className="cursor-pointer px-4 py-2 hover:bg-[#FFD28F]/20"
                       onClick={() => router.push('/merchant')}
                     >
-                      For Merchants
+                      For merchants
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
             </div>
+            {/* Right Side */}
+            <div className="w-[620px] h-[608px]">
+              <img
+                src="/images/hero-section.png"
+                alt="Hero section"
+                className="object-contain w-full h-full"
+              />
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </>
   )
 }

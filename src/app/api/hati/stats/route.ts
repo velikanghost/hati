@@ -126,15 +126,7 @@ export async function GET(
             .getWalletBalance(merchant.hatiWalletId)
             .catch((error) => {
               console.warn('Failed to fetch Circle balance:', error)
-              return {
-                walletId: merchant.hatiWalletId,
-                address: merchant.hatiWalletAddress,
-                blockchain: 'EVM',
-                nativeBalance: '0',
-                tokenBalances: [],
-                totalUsdcBalance: '0',
-                lastUpdated: new Date().toISOString(),
-              }
+              return null
             })
         : Promise.resolve({
             walletId: merchant.hatiWalletId || '',
@@ -149,7 +141,7 @@ export async function GET(
 
     // Format balance for display
     const usdcAmount =
-      parseFloat(balanceData.totalUsdcBalance) / Math.pow(10, 6) // USDC has 6 decimals
+      parseFloat(balanceData?.totalUsdcBalance || '0') / Math.pow(10, 6) // USDC has 6 decimals
     const formattedUsdcBalance = usdcAmount.toFixed(2)
 
     // Map risk tolerance to card tier for backward compatibility
@@ -189,15 +181,15 @@ export async function GET(
         stats,
         recentTransactions,
         balanceOverview: {
-          totalUsdcBalance: balanceData.totalUsdcBalance,
+          totalUsdcBalance: balanceData?.totalUsdcBalance || '0',
           formattedUsdcBalance,
           hatiBalance: {
-            address: balanceData.address,
-            blockchain: balanceData.blockchain,
-            nativeBalance: balanceData.nativeBalance,
-            tokenBalances: balanceData.tokenBalances,
+            address: balanceData?.address || '',
+            blockchain: balanceData?.blockchain || '',
+            nativeBalance: balanceData?.nativeBalance || '0',
+            tokenBalances: balanceData?.tokenBalances || [],
           },
-          lastUpdated: balanceData.lastUpdated,
+          lastUpdated: balanceData?.lastUpdated || new Date().toISOString(),
         },
       },
     }

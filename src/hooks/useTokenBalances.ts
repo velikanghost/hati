@@ -10,12 +10,17 @@ export interface TokenBalance {
   chain: string
   usd_value: string
   amount_formatted: string
+  usd_price?: number
+  native_token?: boolean
 }
 
 interface UseTokenBalancesOptions {
   chain?: string // default "eth"
   enabled?: boolean // allow disabling fetch while missing addr
 }
+
+// Supported chains for token balances
+const SUPPORTED_CHAINS = ['eth', 'arbitrum', 'optimism', 'base', 'linea']
 
 export const useTokenBalances = (
   address?: string,
@@ -33,38 +38,66 @@ export const useTokenBalances = (
       setIsLoading(true)
       setError(null)
       try {
-        const res = await fetch(
-          `/api/moralis/tokens?address=${address}&chain=${chain}`,
-          { signal: controller.signal },
+        // If specific chain requested, only fetch that one
+        const chainsToFetch = chain ? [chain] : SUPPORTED_CHAINS
+
+        // Fetch all chains in parallel
+        const responses = await Promise.all(
+          chainsToFetch.map(async (chainId) => {
+            try {
+              const res = await fetch(
+                `/api/moralis/tokens?address=${address}&chain=${chainId}`,
+                { signal: controller.signal },
+              )
+              if (!res.ok) {
+                console.warn(
+                  `Failed to fetch balances for ${chainId}:`,
+                  await res.text(),
+                )
+                return []
+              }
+              const json = await res.json()
+              if (!json.success) {
+                console.warn(
+                  `Error fetching balances for ${chainId}:`,
+                  json.error,
+                )
+                return []
+              }
+              return (json.result || []).map((item: any) => ({
+                ...item,
+                chain: chainId,
+              }))
+            } catch (err) {
+              console.warn(`Failed to fetch ${chainId} balances:`, err)
+              return []
+            }
+          }),
         )
-        if (!res.ok) {
-          const errText = await res.text()
-          throw new Error(errText)
-        }
-        const json = await res.json()
-        if (json.success) {
-          let rawList: any[] = []
 
-          const dataArray: any[] = Array.isArray(json.data) ? json.data : []
+        // Combine all responses and map to TokenBalance format
+        const allTokens = responses.flat()
 
-          rawList = dataArray // already flattened
+        const mapped: TokenBalance[] = allTokens.map((item: any) => ({
+          token_address: item.token_address,
+          symbol: item.symbol,
+          name: item.name,
+          decimals: Number(item.decimals || 18),
+          amount: item.balance,
+          thumbnail: item.thumbnail,
+          chain: item.chain,
+          usd_value: item.usd_value?.toString() || '0',
+          amount_formatted:
+            item.balance_formatted ||
+            (
+              parseFloat(item.balance) /
+              Math.pow(10, Number(item.decimals || 18))
+            ).toString(),
+          usd_price: item.usd_price,
+          native_token: item.native_token,
+        }))
 
-          const mapped: TokenBalance[] = rawList.map((item) => ({
-            token_address: item.token_address,
-            symbol: item.symbol,
-            name: item.name,
-            decimals: Number(item.decimals ?? 18),
-            amount: item.amount,
-            thumbnail: item.thumbnail,
-            chain: item.chain,
-            usd_value: item.usd_value,
-            amount_formatted: item.amount_formatted,
-          }))
-
-          setBalances(mapped)
-        } else {
-          throw new Error(json.error || 'Unknown error')
-        }
+        setBalances(mapped)
       } catch (err: any) {
         if (err.name !== 'AbortError') {
           setError(err.message || 'Failed to fetch balances')

@@ -10,19 +10,36 @@ import { Card, CardContent } from '@/components/ui/card'
 import { ChevronDown, Wallet, Shield, Store } from 'lucide-react'
 import { useTokenBalances, TokenBalance } from '@/hooks/useTokenBalances'
 import { TokenSelectModal } from '@/components/tokenSelectModal'
+import { PaymentConfirmationModal } from '@/components/merchant/PaymentConfirmationModal'
 import SetMerchant from '@/components/setMerchant'
 import { Tab } from '@/lib/types/all'
+import { HATI_CONFIG } from '@/lib/data/hati-config'
 
-// Mapping Moralis chain names to numeric chain IDs used by LiFi
+// Mapping chain names to numeric chain IDs used by LiFi
 const CHAIN_NAME_TO_ID: Record<string, number> = {
-  Ethereum: 1,
-  'Ethereum Mainnet': 1,
-  Arbitrum: 42161,
-  Optimism: 10,
-  Base: 8453,
-  Linea: 59144,
+  eth: 1,
+  ethereum: 1,
+  'ethereum mainnet': 1,
+  arbitrum: 42161,
+  'arbitrum one': 42161,
+  optimism: 10,
+  base: 8453,
+  linea: 59144,
+  polygon: 137,
+  matic: 137,
+  bsc: 56,
+  'binance smart chain': 56,
 }
-const LINEA_USDC = '0x176211869Ca2B568f2A7D4EE941E073a821EE1ff'
+
+// Helper function to get chain ID regardless of letter case
+const getChainId = (chainName: string): number | undefined => {
+  const normalizedName = chainName.toLowerCase().trim()
+  return CHAIN_NAME_TO_ID[normalizedName]
+}
+
+// Merchant network configuration
+const MERCHANT_CHAIN_ID = HATI_CONFIG.MERCHANT_NETWORK.chainId
+const MERCHANT_USDC = HATI_CONFIG.MERCHANT_NETWORK.usdc
 
 const Shopper = () => {
   const dispatch = useAppDispatch()
@@ -31,6 +48,7 @@ const Shopper = () => {
 
   const hasCheckedInitialConnection = useRef(false)
   const [showTokenModal, setShowTokenModal] = useState(false)
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false)
   const [selectedToken, setSelectedToken] = useState<TokenBalance | null>(null)
   const [activeTabState, setActiveTabState] = useState<Tab>('DEFAULT')
 
@@ -85,6 +103,28 @@ const Shopper = () => {
     checkExistingConnection()
   }, [account?.address, dispatch, userEvmAccount.address])
 
+  const switchChain = async (chainId: number) => {
+    if (!window.ethereum) {
+      throw new Error('MetaMask not found')
+    }
+
+    try {
+      await window.ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: `0x${chainId.toString(16)}` }],
+      })
+      return true
+    } catch (error: any) {
+      if (error.code === 4902) {
+        // Chain not added to MetaMask
+        toast.error('Please add this network to MetaMask first')
+      } else {
+        toast.error('Failed to switch network')
+      }
+      throw error
+    }
+  }
+
   const beginTransfer = async () => {
     console.log('🔄 Beginning transfer with state:', {
       hasWallet: !!userEvmAccount.address,
@@ -133,7 +173,21 @@ const Shopper = () => {
       const amountUsd = merchantAmount || 0
       const tokenEquivalent = tokenPrice ? amountUsd / tokenPrice : 0
 
-      const network = selectedToken.chain || 'unknown'
+      const sourceChain = selectedToken.chain.toLowerCase().trim()
+      const fromChainId = getChainId(sourceChain)
+
+      if (!fromChainId) {
+        toast.error(`Unsupported source chain: ${sourceChain}`)
+        return
+      }
+
+      // Switch to the correct source chain if needed
+      try {
+        await switchChain(fromChainId)
+      } catch (error) {
+        console.error('Failed to switch chains:', error)
+        return
+      }
 
       // ------------------------------------------------------------------
       // 1. Fetch merchant profile to obtain destination Hati wallet address
@@ -147,9 +201,8 @@ const Shopper = () => {
       const destinationAddress = merchantProfile.hatiWalletAddress
 
       // ------------------------------------------------------------------
-      // 2. Build LiFi request to get routes (source → Linea USDC)
+      // 2. Build LiFi request to get routes (source → Optimism USDC)
       // ------------------------------------------------------------------
-      const fromChainId = CHAIN_NAME_TO_ID[network] || 1
       const decimals = selectedToken.decimals || 18
       const rawAmount = BigInt(
         Math.floor(tokenEquivalent * 10 ** decimals),
@@ -158,13 +211,15 @@ const Shopper = () => {
       const routeRequestBody = {
         action: 'getRoutes',
         fromChainId,
-        toChainId: 59144, // Linea mainnet
+        toChainId: MERCHANT_CHAIN_ID,
         fromTokenAddress: selectedToken.token_address,
-        toTokenAddress: LINEA_USDC,
+        toTokenAddress: MERCHANT_USDC,
         fromAmount: rawAmount,
         fromAddress: userEvmAccount.address,
         toAddress: destinationAddress,
       }
+
+      console.log('🔄 Requesting bridge routes:', routeRequestBody)
 
       const routeRes = await fetch('/api/lifi/bridge', {
         method: 'POST',
@@ -209,15 +264,22 @@ const Shopper = () => {
           merchantId,
           merchantAmount: amountUsd,
           token: selectedToken.symbol,
-          network,
+          sourceChain,
           tokenEquivalent,
           destinationAddress,
           txHash: result.txHash,
         })
+        setShowConfirmationModal(true) // Show confirmation modal on success
       }
     } catch (e) {
-      console.error('Price fetch failed', e)
+      console.error('Payment execution failed:', e)
+      toast.error('Payment failed. Please try again.')
     }
+  }
+
+  const handleNewTransaction = () => {
+    setShowConfirmationModal(false)
+    setSelectedToken(null)
   }
 
   const getFeeReduction = () => {
@@ -281,13 +343,14 @@ const Shopper = () => {
         <div className="max-w-lg mx-auto">
           <Card className="relative overflow-hidden border-0 shadow-2xl bg-white/95 backdrop-blur-sm rounded-3xl">
             <CardContent className="p-8">
-              <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-[#0B263F]">
-                  Checkout with Hati
+              <div className="flex items-center justify-between mb-4">
+                <h1 className="text-xl font-bold text-[#0B263F]">
+                  Pay with Hati
                 </h1>
                 <Button
                   variant="outline"
                   size="sm"
+                  className="rounded-xl border-[0B263F]"
                   onClick={() => setActiveTab('SET_MERCHANT')}
                 >
                   Set Merchant
@@ -295,15 +358,15 @@ const Shopper = () => {
               </div>
 
               {/* Payment Details Section */}
-              <div className="mb-8">
-                <Card className="border border-gray-200 bg-gray-50 rounded-2xl">
+              <div className="mb-6">
+                <Card className="border border-gray-200 bg-gray-50 rounded-xl">
                   <CardContent className="flex items-center justify-between p-6">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-[#0B263F] rounded-full flex items-center justify-center">
+                      <div className="w-12 h-12 bg-[#0B263F] rounded-full flex items-center justify-center">
                         <Store className="w-5 h-5 text-white" />
                       </div>
                       <div>
-                        <p className="font-semibold text-[#0B263F]">
+                        <p className="text-lg font-semibold text-[#0B263F]">
                           {merchantName}
                         </p>
                         <p className="font-mono text-xs text-gray-500">
@@ -311,7 +374,7 @@ const Shopper = () => {
                         </p>
                       </div>
                     </div>
-                    <div className="flex-1">
+                    <div>
                       <p className="text-4xl font-bold text-[#0B263F]">
                         ${merchantAmount}
                       </p>
@@ -321,16 +384,37 @@ const Shopper = () => {
               </div>
 
               {/* Payment Method Selection */}
-              <div className="mb-8">
-                <Card className="bg-[#0B263F] text-white border-0 rounded-2xl">
+              <div className="mb-6">
+                <Card className="bg-gray-50 text-[#0B263F] border-[#0B263F] rounded-xl">
                   <CardContent className="p-6">
-                    <div className="flex items-center gap-3 mb-4">
-                      <Wallet className="w-5 h-5" />
-                      <p className="font-semibold">You pay with</p>
-                    </div>
+                    {userEvmAccount.address && (
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <Wallet className="w-5 h-5" />
+                          <p className="text-[#0B263F]">
+                            {userEvmAccount.address.slice(0, 10)}...
+                            {userEvmAccount.address.slice(-10)}
+                          </p>
+                        </div>
+
+                        {cardTier?.hasCard && (
+                          <div className="p-3 mt-3 bg-white border border-green-100 rounded-xl">
+                            <div className="flex items-center gap-2">
+                              <Shield className="w-4 h-4 text-[#0B263F]" />
+                              <p className="text-sm font-semibold text-[#0B263F]">
+                                MetaMask Card ({cardTier.tier.toUpperCase()})
+                              </p>
+                            </div>
+                            <p className="mt-1 text-xs text-gray-600">
+                              {feeReduction}% fee reduction applied
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <Button
                       variant="ghost"
-                      className="justify-between w-full h-auto p-4 text-white border hover:bg-white/10 rounded-xl border-white/20"
+                      className="justify-between w-full h-auto p-4 text-[#0B263F] border hover:bg-white/10 rounded-xl border-white/20"
                       onClick={() => setShowTokenModal(true)}
                     >
                       <span className="text-lg font-medium">
@@ -342,25 +426,9 @@ const Shopper = () => {
                 </Card>
               </div>
 
-              {/* Connect Wallet / Pay Button */}
-              <Button
-                className="w-full bg-[#0B263F] hover:bg-[#0B263F]/90 text-white py-4 font-bold text-lg rounded-2xl shadow-xl transition-all duration-300 hover:shadow-2xl hover:scale-[1.02]"
-                onClick={userEvmAccount.address ? beginTransfer : getAccount}
-                disabled={isExecuting}
-              >
-                <div className="flex items-center gap-3">
-                  <Wallet className="w-5 h-5" />
-                  {isExecuting
-                    ? 'Processing Payment...'
-                    : userEvmAccount.address
-                    ? 'Complete Payment'
-                    : 'Connect Wallet'}
-                </div>
-              </Button>
-
               {/* Execution Progress */}
               {isExecuting && (
-                <div className="p-4 mt-4 border border-blue-200 bg-blue-50 rounded-2xl">
+                <div className="p-4 mb-6 border border-blue-200 bg-blue-50 rounded-2xl">
                   <div className="flex items-center gap-3">
                     <div className="w-4 h-4 bg-blue-500 rounded-full animate-pulse"></div>
                     <p className="text-sm font-semibold text-blue-700">
@@ -373,10 +441,23 @@ const Shopper = () => {
                 </div>
               )}
 
+              {/* Connect Wallet / Pay Button */}
+              <Button
+                className="w-full bg-[#0B263F] hover:bg-[#0B263F]/90 text-white py-7 font-semibold text-lg rounded-xl shadow-lg transition-all duration-300 hover:shadow-xl hover:scale-[1.01]"
+                onClick={userEvmAccount.address ? beginTransfer : getAccount}
+                disabled={isExecuting}
+              >
+                {isExecuting
+                  ? 'Processing Payment...'
+                  : userEvmAccount.address
+                  ? 'Complete Payment'
+                  : 'Connect Wallet'}
+              </Button>
+
               {/* Execution Result */}
               {executionResult && !isExecuting && (
                 <div
-                  className={`mt-4 p-4 border rounded-2xl ${
+                  className={`mt-6 p-4 border rounded-2xl ${
                     executionResult.success
                       ? 'border-green-200 bg-green-50'
                       : 'border-red-200 bg-red-50'
@@ -414,35 +495,6 @@ const Shopper = () => {
                 </div>
               )}
 
-              {/* Connected Wallet Info */}
-              {userEvmAccount.address && (
-                <div className="p-4 mt-6 border border-green-200 bg-green-50 rounded-2xl">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-                    <p className="text-sm font-semibold text-green-700">
-                      Wallet Connected
-                    </p>
-                  </div>
-                  <p className="font-mono text-sm text-green-600">
-                    {userEvmAccount.address.slice(0, 6)}...
-                    {userEvmAccount.address.slice(-4)}
-                  </p>
-                  {cardTier?.hasCard && (
-                    <div className="p-3 mt-3 bg-white border border-green-100 rounded-xl">
-                      <div className="flex items-center gap-2">
-                        <Shield className="w-4 h-4 text-[#0B263F]" />
-                        <p className="text-sm font-semibold text-[#0B263F]">
-                          MetaMask Card ({cardTier.tier.toUpperCase()})
-                        </p>
-                      </div>
-                      <p className="mt-1 text-xs text-gray-600">
-                        {feeReduction}% fee reduction applied
-                      </p>
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Token Select Modal */}
               <TokenSelectModal
                 isOpen={showTokenModal}
@@ -450,6 +502,14 @@ const Shopper = () => {
                 tokens={balances}
                 onSelect={handleSelectToken}
                 loading={balancesLoading}
+              />
+
+              {/* Payment Confirmation Modal */}
+              <PaymentConfirmationModal
+                isOpen={showConfirmationModal}
+                onClose={() => setShowConfirmationModal(false)}
+                onNewTransaction={handleNewTransaction}
+                txHash={executionResult?.txHash}
               />
             </CardContent>
           </Card>

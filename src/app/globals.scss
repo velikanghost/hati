@@ -2,13 +2,24 @@
 @use '../styles/Main.scss';
 
 @import url('https://fonts.googleapis.com/css2?family=Catamaran:wght@100..900&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Raleway:ital,wght@0,100..900;1,100..900&display=swap');
+@import './space-grotesk-fonts.css';
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+
+:root {
+  --font-space-grotesk: 'Space Grotesk', sans-serif;
+}
+html {
+  font-family: var(--font-space-grotesk);
+}
+
 body {
-  font-family: 'Raleway', sans-serif;
+  font-family: var(--font-space-grotesk);
   box-sizing: border-box;
 }
 
@@ -32,6 +43,10 @@ body {
 
 .transparent {
   background: transparent;
+}
+
+.font-space-grotesk {
+  font-family: 'Space Grotesk', sans-serif !important;
 }
 
 @layer base {

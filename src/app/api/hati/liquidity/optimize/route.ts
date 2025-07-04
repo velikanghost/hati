@@ -31,8 +31,6 @@ interface OptimizationResult {
 
 class SmartLiquidityAgent {
   private readonly MINIMUM_BALANCE = 200 // 200 USDC threshold
-  private readonly LINEA_USDC_ADDRESS =
-    '0x176211869cA2b568f2A7D4EE941E073a821EE1ff' // Linea USDC
 
   // Mock DeFi protocols on Linea (replace with real integrations)
   private readonly YIELD_PROTOCOLS: YieldProtocol[] = [

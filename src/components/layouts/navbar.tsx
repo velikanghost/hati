@@ -26,13 +26,22 @@ const Navbar = () => {
 
   return (
     <>
-      <NavigationMenu className="mx-auto navigation-menu">
+      <NavigationMenu className="mx-auto navigation-menu font-space-grotesk">
         <NavigationMenuList className="container items-center justify-between w-screen pt-2 nav-container">
           <NavigationMenuItem
-            className="py-4 text-2xl font-semibold cursor-pointer text-primary-foreground font-headings"
+            className={`flex items-center py-4 text-2xl font-semibold cursor-pointer font-headings ${
+              pathname.includes('shoppers')
+                ? 'text-[#0B263F]'
+                : 'text-[#0B263F]'
+            }`}
             onClick={() => router.push('/')}
           >
-            Hati
+            <img
+              src="/images/hati_logo.png"
+              alt="Hati Logo"
+              className="object-contain w-8 h-8 mr-2 rounded-full"
+            />
+            <span className="text-2xl font-semibold">Hati</span>
           </NavigationMenuItem>
 
           {pathname?.includes('/shoppers') ? (

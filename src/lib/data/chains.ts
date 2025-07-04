@@ -1,8 +1,8 @@
 export const chains = [
   {
-    title: 'Linea',
-    explorer: 'https://lineascan.build',
-    icon: 'linea.svg',
+    title: 'Optimism',
+    explorer: 'https://optimistic.etherscan.io',
+    icon: 'optimism.svg',
   },
 ]
 
@@ -23,8 +23,8 @@ export const bridgeSourceChains = [
     icon: 'base.svg',
   },
   {
-    title: 'Optimism',
-    explorer: 'https://optimistic.etherscan.io',
-    icon: 'optimism.svg',
+    title: 'Linea',
+    explorer: 'https://lineascan.build',
+    icon: 'linea.svg',
   },
 ]
