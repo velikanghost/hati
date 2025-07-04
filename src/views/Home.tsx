@@ -36,9 +36,10 @@ const Home = () => {
                 Any Chain.
               </h1>
               <p className="text-base sm:text-lg md:text-xl text-[#1a2530] mb-6 md:mb-8">
-                Experience Hati, A payment solution powered by Monad Layer-1
-                blockchain, providing fast one-click transactions regardless of
-                source and destination chains.
+                Experience Hati, a MetaMask Card-powered payment gateway that
+                enables instant cross-chain transactions with premium benefits
+                for card holders. Pay seamlessly across any chain with optimized
+                USDC settlements.
               </p>
               <div className="flex flex-col w-full gap-3 mb-6 sm:flex-row md:gap-4">
                 <DropdownMenu>
